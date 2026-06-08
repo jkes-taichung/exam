@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>建功國小考試網址與缺考監控中心</title>
+  
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+  
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  
+  <style>
+    :root {
+      --primary-color: #3b82f6;
+      --primary-hover: #2563eb;
+      --bg-color: #f1f5f9;
+      --card-bg: #ffffff;
+      --text-main: #1e293b;
+      --text-muted: #64748b;
+      --border-color: #e2e8f0;
+      --table-header-bg: #f8fafc;
+    }
+
+    body {
+      font-family: "Microsoft JhengHei", "Noto Sans TC", Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      line-height: 1.6;
+    }
+
+    .container { max-width: 1400px; margin: 0 auto; }
+
+    .header-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--card-bg);
+      padding: 16px 24px;
+      border-radius: 12px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+      margin-bottom: 24px;
+    }
+
+    .title-area { display: flex; align-items: center; gap: 15px; }
+    .title-text { font-size: 22px; font-weight: 800; color: #0f172a; }
+
+    .date-badge {
+      background-color: #e0f2fe;
+      color: #0369a1;
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 14px;
+      font-weight: bold;
+    }
+
+    .header-actions { display: flex; gap: 12px; align-items: center; }
+
+    .refresh-btn, .upload-btn {
+      padding: 8px 16px;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: bold;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .refresh-btn { background-color: var(--primary-color); }
+    .refresh-btn:hover { background-color: var(--primary-hover); }
+    .refresh-btn:disabled { background-color: #93c5fd !important; cursor: not-allowed; }
+    .refresh-btn.success { background-color: #10b981 !important; box-shadow: 0 4px 6px rgba(16, 185, 129, 0.2); }
+    .refresh-btn svg { transform-origin: center; }
+    .spinning { animation: spin-btn-icon 1s linear infinite; }
+
+    @keyframes spin-btn-icon {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .upload-btn { background-color: #10b981; }
+    .upload-btn:hover { background-color: #059669; }
+
+    .card-section {
+      background: var(--card-bg);
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+      margin-bottom: 24px;
+    }
+
+    .section-title {
+      font-size: 20px;
+      font-weight: bold;
+      color: #0f172a;
+      margin-top: 0;
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 2px solid var(--bg-color);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .section-title::before {
+      content: "";
+      display: inline-block;
+      width: 6px;
+      height: 20px;
+      background-color: var(--primary-color);
+      border-radius: 4px;
+    }
+
+    .grid-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(480px, 1fr));
+      gap: 24px;
+    }
+
+    .grade-wrapper { border: 2px solid var(--border-color); border-radius: 8px; overflow: hidden; background: #ffffff; }
+    .grade-header, .grade-sub-title { padding: 12px 16px; font-size: 16px; font-weight: bold; text-align: center; margin: 0; }
+
+    /* 各年級配色 */
+    .theme-g1 { border-color: #fca5a5; }
+    .theme-g1 .grade-header, .theme-g1 .grade-sub-title { background-color: #fee2e2; color: #991b1b; border-bottom: 1px solid #fca5a5; }
+    .theme-g2 { border-color: #fdba74; }
+    .theme-g2 .grade-header, .theme-g2 .grade-sub-title { background-color: #ffedd5; color: #9a3412; border-bottom: 1px solid #fdba74; }
+    .theme-g3 { border-color: #fcd34d; }
+    .theme-g3 .grade-header, .theme-g3 .grade-sub-title { background-color: #fef3c7; color: #92400e; border-bottom: 1px solid #fcd34d; }
+    .theme-g4 { border-color: #86efac; }
+    .theme-g4 .grade-header, .theme-g4 .grade-sub-title { background-color: #dcfce7; color: #166534; border-bottom: 1px solid #86efac; }
+    .theme-g5 { border-color: #93c5fd; }
+    .theme-g5 .grade-header, .theme-g5 .grade-sub-title { background-color: #dbeafe; color: #1e3a8a; border-bottom: 1px solid #93c5fd; }
+    .theme-g6 { border-color: #d8b4fe; }
+    .theme-g6 .grade-header, .theme-g6 .grade-sub-title { background-color: #f3e8ff; color: #581c87; border-bottom: 1px solid #d8b4fe; }
+
+    table { width: 100%; border-collapse: collapse; background-color: #ffffff; }
+    th, td { border-bottom: 1px solid var(--border-color); padding: 12px 16px; text-align: left; font-size: 14px; color: #475569; }
+    th { background-color: #f8fafc; font-weight: 600; color: #64748b; transition: background-color 0.3s; }
+    tbody tr:last-child td { border-bottom: none; }
+    tbody tr:hover { background-color: #f1f5f9; }
+
+    .th-alert {  color: #ef4444 !important; }
+    .status-not-filled { color: #94a3b8; font-style: italic; font-size: 13px; }
+
+    .btn-open-url {
+      display: inline-block;
+      background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+      color: #ffffff !important;
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 700;
+      text-decoration: none;
+      box-shadow: 0 2px 4px rgba(37, 99, 235, 0.3);
+      transition: all 0.2s ease;
+      white-space: nowrap;
+    }
+    .btn-open-url:hover {
+      background: linear-gradient(135deg, #2563eb, #1e40af);
+      box-shadow: 0 4px 8px rgba(37, 99, 235, 0.4);
+      transform: translateY(-2px);
+    }
+
+    /* 彈跳視窗 */
+    .modal-overlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(15, 23, 42, 0.6); z-index: 1000;
+      display: flex; align-items: center; justify-content: center; backdrop-filter: blur(2px);
+    }
+    .modal-content {
+      background: #ffffff; width: 90%; max-width: 600px; border-radius: 12px; padding: 30px;
+      position: relative; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+      animation: modalFadeIn 0.3s ease;
+    }
+    @keyframes modalFadeIn { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+
+    .modal-close-btn { position: absolute; top: 16px; right: 20px; font-size: 28px; color: #94a3b8; cursor: pointer; line-height: 1; }
+    .modal-close-btn:hover { color: #334155; }
+
+    .grade-buttons-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 8px; }
+    .grade-btn {
+      padding: 14px; border: 2px solid var(--border-color); background: #ffffff; border-radius: 8px;
+      font-size: 16px; font-weight: bold; color: #475569; cursor: pointer; transition: all 0.2s ease; text-align: center;
+    }
+    .grade-btn:hover { border-color: #93c5fd; background: #eff6ff; color: var(--primary-hover); }
+    .grade-btn.active { border-color: var(--primary-color); background: var(--primary-color); color: #ffffff; box-shadow: 0 4px 6px rgba(59, 130, 246, 0.2); }
+
+    .form-group { margin-bottom: 20px; }
+    .form-group label { display: block; margin-bottom: 10px; font-weight: 600; color: #334155; font-size: 15px; }
+    .form-control { width: 100%; padding: 10px 12px; border: 1px solid var(--border-color); border-radius: 6px; box-sizing: border-box; font-size: 14px; }
+    .form-control:focus { outline: none; border-color: var(--primary-color); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+
+    .btn-group { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+    .btn { padding: 9px 16px; border: 1px solid var(--border-color); background: #ffffff; color: #475569; border-radius: 6px; cursor: pointer; font-weight: 600; }
+    .btn-submit { background: var(--primary-color); color: #fff; border-color: var(--primary-color); }
+    .btn-submit:hover { background: var(--primary-hover); }
+
+    .action-link { background: #ffffff; border: 1px solid #166534; color: #166534; padding: 4px 10px; border-radius: 4px; font-size: 13px; text-decoration: none; font-weight: bold; }
+    .action-link:hover { background: #dcfce7; }
+    
+    .hidden { display: none !important; }
+    .status-empty { color: #94a3b8; font-style: italic; font-size: 13px; }
+    .status-loading { color: #64748b; text-align: center; padding: 20px !important; }
+    .notice-box { background: #fffbeb; border-left: 4px solid #f59e0b; padding: 12px 16px; border-radius: 4px; margin-bottom: 20px; color: #92400e; font-size: 14px; }
+    .btn-alert-confirm { background-color: #0c5ad9; color: white; border: none; padding: 10px 32px; font-size: 15px; font-weight: bold; border-radius: 50px; cursor: pointer; }
+    @keyframes spin { 100% { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <div class="header-bar">
+    <div class="title-area">
+      <div class="title-text">建功國小考試網址與缺考監控中心</div>
+      <div class="date-badge" id="todayDateLabel">今日日期：載入中...</div>
+    </div>
+    <div class="header-actions">
+      <button class="upload-btn" onclick="openUploadModal()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+        上傳英聽檔案
+      </button>
+      
+      <button id="refreshBtn" class="refresh-btn" onclick="fetchFirebaseData()">
+        <svg id="refreshIcon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"></path><path d="M3 12a9 9 0 1 0 2.13-5.88L21 8"></path></svg>
+        <span id="refreshText">重新整理數據</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="card-section">
+    <h2 class="section-title">各年級考試網址總覽</h2>
+    <div id="gradeTablesContainer" class="grid-container"></div>
+  </div>
+
+  <div class="card-section">
+    <h2 class="section-title">本次缺考回報統計</h2>
+    <div class="grid-container">
+      <div class="grade-wrapper theme-g1">
+        <div class="grade-sub-title">一年級</div>
+        <table>
+          <thead><tr><th style="width: 25%;">班級</th><th id="th-g1-zh" style="width: 25%;">國語</th><th id="th-g1-life" style="width: 25%;">生活</th><th id="th-g1-math" style="width: 25%;">數學</th></tr></thead>
+          <tbody id="absenceBody1"><tr><td colspan="4" class="status-loading">載入中...</td></tr></tbody>
+        </table>
+      </div>
+      <div class="grade-wrapper theme-g2">
+        <div class="grade-sub-title">二年級</div>
+        <table>
+          <thead><tr><th style="width: 25%;">班級</th><th id="th-g2-zh" style="width: 25%;">國語</th><th id="th-g2-life" style="width: 25%;">生活</th><th id="th-g2-math" style="width: 25%;">數學</th></tr></thead>
+          <tbody id="absenceBody2"><tr><td colspan="4" class="status-loading">載入中...</td></tr></tbody>
+        </table>
+      </div>
+      <div class="grade-wrapper theme-g3">
+        <div class="grade-sub-title">三年級</div>
+        <table>
+          <thead><tr><th>班級</th><th id="th-g3-zh">國語</th><th id="th-g3-nature">自然</th><th id="th-g3-eng">英文</th><th id="th-g3-math">數學</th><th id="th-g3-society">社會</th></tr></thead>
+          <tbody id="absenceBody3"><tr><td colspan="6" class="status-loading">載入中...</td></tr></tbody>
+        </table>
+      </div>
+      <div class="grade-wrapper theme-g4">
+        <div class="grade-sub-title">四年級</div>
+        <table>
+          <thead><tr><th>班級</th><th id="th-g4-zh">國語</th><th id="th-g4-nature">自然</th><th id="th-g4-eng">英文</th><th id="th-g4-math">數學</th><th id="th-g4-society">社會</th></tr></thead>
+          <tbody id="absenceBody4"><tr><td colspan="6" class="status-loading">載入中...</td></tr></tbody>
+        </table>
+      </div>
+      <div class="grade-wrapper theme-g5">
+        <div class="grade-sub-title">五年級</div>
+        <table>
+          <thead><tr><th>班級</th><th id="th-g5-zh">國語</th><th id="th-g5-nature">自然</th><th id="th-g5-eng">英文</th><th id="th-g5-math">數學</th><th id="th-g5-society">社會</th></tr></thead>
+          <tbody id="absenceBody5"><tr><td colspan="6" class="status-loading">載入中...</td></tr></tbody>
+        </table>
+      </div>
+      <div class="grade-wrapper theme-g6">
+        <div class="grade-sub-title">六年級</div>
+        <table>
+          <thead><tr><th>班級</th><th id="th-g6-zh">國語</th><th id="th-g6-nature">自然</th><th id="th-g6-eng">英文</th><th id="th-g6-math">數學</th><th id="th-g6-society">社會</th></tr></thead>
+          <tbody id="absenceBody6"><tr><td colspan="6" class="status-loading">載入中...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="uploadModal" class="modal-overlay hidden">
+  <div class="modal-content">
+    <span class="modal-close-btn" onclick="closeUploadModal()">&times;</span>
+    <h2 class="section-title" style="margin-top: 0; border-bottom: none; padding-bottom: 0;">英聽檔案上傳專區</h2>
+    
+    <div style="margin-top: 20px;">
+      <div class="form-group">
+        <label>1. 請點擊選擇要上傳的年級</label>
+        <div class="grade-buttons-grid">
+          <button class="grade-btn" id="btn-301" onclick="selectUploadGrade('301', '三年級')">三年級</button>
+          <button class="grade-btn" id="btn-401" onclick="selectUploadGrade('401', '四年級')">四年級</button>
+          <button class="grade-btn" id="btn-501" onclick="selectUploadGrade('501', '五年級')">五年級</button>
+          <button class="grade-btn" id="btn-601" onclick="selectUploadGrade('601', '六年級')">六年級</button>
+        </div>
+      </div>
+
+      <div id="pageAuthStep" class="hidden">
+        <div class="notice-box">
+          👉 您目前選擇的是：<strong id="selectedGradeText" style="font-size: 16px;">未選擇</strong>
+        </div>
+        <div class="form-group">
+          <label for="idSuffixInput">2. 老師身分驗證</label>
+          <input type="password" id="idSuffixInput" class="form-control" maxlength="6" placeholder="請輸入身分證字號後六碼">
+        </div>
+        
+        <div class="form-group">
+          <label for="captchaInput">3. 圖形驗證碼 (點擊圖片可更換)</label>
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <input type="text" id="captchaInput" class="form-control" placeholder="請輸入驗證碼" style="max-width: 150px;" maxlength="4">
+            <canvas id="captchaCanvas" width="120" height="38" style="cursor: pointer; border: 1px solid var(--border-color); border-radius: 6px; background-color: #f8fafc;" title="點擊更換驗證碼" onclick="generateCaptcha()"></canvas>
+            <span style="font-size: 13px; color: var(--primary-color); cursor: pointer; font-weight: bold; user-select: none;" onclick="generateCaptcha()">換一張</span>
+          </div>
+        </div>
+
+        <div style="text-align: right; margin-top: 15px;">
+          <button class="refresh-btn" onclick="processPageVerify()">送出驗證</button>
+        </div>
+      </div>
+
+      <div id="pageUploadStep" class="hidden">
+        <div style="background: #ecfdf5; border: 1px solid #10b981; color: #047857; padding: 12px; border-radius: 6px; margin-bottom: 20px; font-weight: bold; text-align: center;">
+          ✓ 驗證成功！歡迎 <span id="teacherName"></span> 老師
+        </div>
+        
+        <div id="uploadFormControls">
+          <div class="form-group">
+            <label for="audioFileInput">4. 請選取電腦中的英聽音檔</label>
+            <input type="file" id="audioFileInput" class="form-control" accept="audio/*,.mp3,.wav,.m4a,.wma">
+          </div>
+          <div class="btn-group">
+            <button class="btn" onclick="resetUploadForm()">重選年級</button>
+            <button class="btn btn-submit" onclick="processPageUpload()">確認送出上傳</button>
+          </div>
+        </div>
+
+        <div id="uploadSpinner" class="hidden" style="text-align: center; padding: 20px 0;">
+          <svg style="animation: spin 1s linear infinite; color: #3b82f6; width: 36px; height: 36px; margin: 0 auto 12px auto; display: block;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle style="opacity: 0.25;" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path style="opacity: 0.75;" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+          <p style="color: #3b82f6; font-weight: bold; margin: 0; font-size: 14px;">檔案上傳中並更新資料庫，請稍候...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="customAlertModal" class="modal-overlay hidden" style="z-index: 2000;">
+  <div class="modal-content" style="max-width: 440px; padding: 24px; border-radius: 12px;">
+    <div id="customAlertMessage" style="font-size: 16px; color: var(--text-main); margin: 10px 0 28px 0; white-space: pre-line; text-align: left; font-weight: 500;"></div>
+    <div style="text-align: right;">
+      <button class="btn-alert-confirm" id="customAlertBtn" onclick="closeCustomAlert()">確定</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // 1. Firebase 初始化
+  const firebaseConfig = {
+    databaseURL: "https://exam-e38aa-default-rtdb.asia-southeast1.firebasedatabase.app"
+  };
+  if (!firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
+  }
+  const database = firebase.database();
+
+  // 2. Supabase 初始化整合
+  const SUPABASE_URL = "https://ltkvavtvwyrholntnzik.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_secret_Vpqx_J0I4q3H1yxSTVeXzA_sBmmedAm";
+  const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  // 互動狀態變數
+  let currentSelectedGradeCode = '';
+  let currentSelectedGradeName = '';
+  let generatedCaptchaCode = '';
+
+  window.onload = function() {
+    const today = new Date();
+    document.getElementById('todayDateLabel').innerText = `今日日期：${today.getFullYear()}/${String(today.getMonth()+1).padStart(2,'0')}/${String(today.getDate()).padStart(2,'0')}`;
+    startRealtimeSync();
+  };
+
+  // 視窗控制
+  function customAlert(message) {
+    document.getElementById('customAlertMessage').innerText = message;
+    document.getElementById('customAlertModal').classList.remove('hidden');
+  }
+  function closeCustomAlert() { document.getElementById('customAlertModal').classList.add('hidden'); }
+  function openUploadModal() { document.getElementById('uploadModal').classList.remove('hidden'); resetUploadForm(); }
+  function closeUploadModal() { document.getElementById('uploadModal').classList.add('hidden'); }
+  // 強制下載音檔的輔助函式
+async function downloadAudioFile(url, fileName) {
+  try {
+    // 提醒：使用 fetch 可以將檔案轉換為 Blob，強制瀏覽器「下載」而不是直接在分頁中「播放」
+    const response = await fetch(url);
+    if (!response.ok) throw new Error('網路回應錯誤');
+    const blob = await response.blob();
+    
+    // 嘗試從網址抓取副檔名，如果抓不到就預設為 mp3
+    let ext = url.split('.').pop().split('?')[0];
+    if (!['mp3', 'wav', 'm4a', 'wma', 'ogg'].includes(ext.toLowerCase())) {
+      ext = 'mp3';
+    }
+
+    // 建立暫時的 Blob URL 與隱藏的 <a> 標籤來觸發下載
+    const blobUrl = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.style.display = 'none';
+    a.href = blobUrl;
+    a.download = `${fileName}.${ext}`; // 設定下載的預設檔名
+    
+    document.body.appendChild(a);
+    a.click();
+    
+    // 下載完成後清理記憶體
+    window.URL.revokeObjectURL(blobUrl);
+    document.body.removeChild(a);
+    
+  } catch (error) {
+    console.error('Blob 下載失敗，改用新分頁開啟:', error);
+    // 💡 備用方案：如果 Supabase 的 CORS (跨域) 設定阻擋了 fetch，就直接開新分頁讓老師按右鍵下載
+    window.open(url, '_blank');
+  }
+}
+
+  // 雲端轉換連結修正（保留給相容格式）
+  function convertToDirectDownloadUrl(url) {
+    if (!url) return "";
+    if (url.indexOf("uc?export=download") > -1) return url; 
+    const match = url.match(/\/file\/d\/([^\/]+)/);
+    if (match && match[1]) return "https://drive.google.com/uc?export=download&id=" + match[1];
+    return url;
+  }
+
+  function fetchFirebaseData() {
+    startRealtimeSync();
+  }
+
+  // Firebase 即時同步偵聽
+  function startRealtimeSync() {
+    const btn = document.getElementById('refreshBtn');
+    const icon = document.getElementById('refreshIcon');
+    const text = document.getElementById('refreshText');
+
+    if (btn && icon && text) {
+      btn.disabled = true;
+      icon.classList.add('spinning');
+      text.innerText = '連線 Firebase 中...';
+    }
+
+    database.ref('exam').off('value'); 
+    database.ref('exam').on('value', snapshot => {
+      const examData = snapshot.val() || {};
+      
+      const timeNode = examData.時間 || [];
+      const classesNode = examData.班級 || [];
+      const absenceNode = examData.缺考 || [];
+    const classUrls = "https://exam-e38aa.web.app/index.html";
+
+      renderGradeTablesFromFirebase(timeNode, classUrls);
+      buildAbsenceTablesWithPreload(classesNode, absenceNode);
+
+      if (btn && icon && text) {
+        icon.classList.remove('spinning');
+        btn.classList.add('success');
+        text.innerText = '✓ 即時同步中';
+        setTimeout(() => {
+          btn.disabled = false;
+          btn.classList.remove('success');
+          text.innerText = '重新整理數據';
+        }, 1200);
+      }
+    }, err => {
+      console.error(err);
+      customAlert("Firebase 連線失敗：" + err.message);
+      if (btn && icon && text) {
+        btn.disabled = false;
+        icon.classList.remove('spinning');
+        text.innerText = '重新整理數據';
+      }
+    });
+  }
+
+
+  
+
+  // 缺考回報統計表格渲染
+  function buildAbsenceTablesWithPreload(classesNode, absenceNode) {
+    const bodies = {
+      1: document.getElementById('absenceBody1'),
+      2: document.getElementById('absenceBody2'),
+      3: document.getElementById('absenceBody3'),
+      4: document.getElementById('absenceBody4'),
+      5: document.getElementById('absenceBody5'),
+      6: document.getElementById('absenceBody6')
+    };
+
+    let htmls = { 1: "", 2: "", 3: "", 4: "", 5: "", 6: "" };
+    let gradeCounts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
+
+    let subjectAlerts = {
+      1: { zh: false, life: false, math: false },
+      2: { zh: false, life: false, math: false },
+      3: { zh: false, nature: false, eng: false, math: false, society: false },
+      4: { zh: false, nature: false, eng: false, math: false, society: false },
+      5: { zh: false, nature: false, eng: false, math: false, society: false },
+      6: { zh: false, nature: false, eng: false, math: false, society: false }
+    };
+
+    const formatAbsence = (val) => {
+      if (val === undefined || val === null || val === "") return `<span class="status-not-filled">未填</span>`;
+      const num = parseInt(val, 10);
+      if (!isNaN(num) && num > 0) return `<span style="color: #ef4444; font-size: 18px; font-weight: 800;">${val}</span>`;
+      return "0";
+    };
+
+    const getNumValue = (val) => {
+      if (val === undefined || val === null || val === "") return 0;
+      const num = parseInt(val, 10);
+      return (!isNaN(num) && num > 0) ? num : 0;
+    };
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const fifteenDaysInMs = 15 * 24 * 60 * 60 * 1000;
+    const minTime = today.getTime() - fifteenDaysInMs;
+    const maxTime = today.getTime() + fifteenDaysInMs;
+
+    const absenceMap = {};
+    const absenceList = Array.isArray(absenceNode) ? absenceNode : Object.values(absenceNode);
+    
+    absenceList.forEach(rec => {
+      if (rec && rec.班級) {
+        let recDateStr = rec.日期 || rec.時間戳記 || rec.timestamp;
+        let isWithinRange = true;
+        if (recDateStr) {
+          let recDate = new Date(recDateStr);
+          if (!isNaN(recDate.getTime())) {
+            let recTime = recDate.getTime();
+            if (recTime < minTime || recTime > maxTime) isWithinRange = false;
+          }
+        }
+        if (isWithinRange) absenceMap[String(rec.班級).trim()] = rec;
+      }
+    });
+
+    let classList = [];
+    if (Array.isArray(classesNode)) {
+      classList = classesNode;
+    } else if (typeof classesNode === 'object') {
+      Object.keys(classesNode).forEach(k => { if (k !== '網址') classList.push(classesNode[k]); });
+    }
+
+    classList.forEach(className => {
+      if (!className || typeof className !== 'string') return;
+      className = className.trim();
+
+      let gradeNum = 0;
+      if (/^[一1]/.test(className)) gradeNum = 1;
+      else if (/^[二2]/.test(className)) gradeNum = 2;
+      else if (/^[三3]/.test(className)) gradeNum = 3;
+      else if (/^[四4]/.test(className)) gradeNum = 4;
+      else if (/^[五5]/.test(className)) gradeNum = 5;
+      else if (/^[六6]/.test(className)) gradeNum = 6;
+
+      if (gradeNum >= 1 && gradeNum <= 6) {
+        gradeCounts[gradeNum]++;
+        const record = absenceMap[className] || {};
+
+        if (getNumValue(record.國語) > 0) subjectAlerts[gradeNum].zh = true;
+        if (getNumValue(record.數學) > 0) subjectAlerts[gradeNum].math = true;
+        if (gradeNum <= 2 && getNumValue(record.生活) > 0) subjectAlerts[gradeNum].life = true;
+        if (gradeNum >= 3) {
+          if (getNumValue(record.自然) > 0) subjectAlerts[gradeNum].nature = true;
+          if (getNumValue(record.英文) > 0) subjectAlerts[gradeNum].eng = true;
+          if (getNumValue(record.社會) > 0) subjectAlerts[gradeNum].society = true;
+        }
+
+        const zh = formatAbsence(record.國語);
+        const math = formatAbsence(record.數學);
+        const nature = formatAbsence(record.自然);
+        const eng = formatAbsence(record.英文);
+        const society = formatAbsence(record.社會);
+        const life = formatAbsence(record.生活);
+
+        if (gradeNum === 1 || gradeNum === 2) {
+          htmls[gradeNum] += `<tr><td style="font-weight: 600; color: #1e293b;">${className}</td><td>${zh}</td><td>${life}</td><td>${math}</td></tr>`;
+        } else {
+          htmls[gradeNum] += `<tr><td style="font-weight: 600; color: #1e293b;">${className}</td><td>${zh}</td><td>${nature}</td><td>${eng}</td><td>${math}</td><td>${society}</td></tr>`;
+        }
+      }
+    });
+
+    const toggleThAlert = (id, isActive) => {
+      const th = document.getElementById(id);
+      if (th) {
+        if (isActive) th.classList.add('th-alert');
+        else th.classList.remove('th-alert');
+      }
+    };
+
+    for (let i = 1; i <= 6; i++) {
+      if (bodies[i]) {
+        if (gradeCounts[i] > 0) bodies[i].innerHTML = htmls[i];
+        else {
+          let cols = (i === 1 || i === 2) ? 4 : 6;
+          bodies[i].innerHTML = `<tr><td colspan="${cols}" style="text-align:center; color:#94a3b8; padding: 20px;">資料庫內無預載班級</td></tr>`;
+        }
+      }
+
+      toggleThAlert(`th-g${i}-zh`, subjectAlerts[i].zh);
+      toggleThAlert(`th-g${i}-math`, subjectAlerts[i].math);
+      if (i <= 2) {
+        toggleThAlert(`th-g${i}-life`, subjectAlerts[i].life);
+      } else {
+        toggleThAlert(`th-g${i}-nature`, subjectAlerts[i].nature);
+        toggleThAlert(`th-g${i}-eng`, subjectAlerts[i].eng);
+        toggleThAlert(`th-g${i}-society`, subjectAlerts[i].society);
+      }
+    }
+  }
+
+  // 考試網址表格渲染
+  function renderGradeTablesFromFirebase(timeNode, classUrls) {
+    const container = document.getElementById('gradeTablesContainer');
+    if (!container) return;
+    
+    const gradeConfigs = [
+      { name: "一年級", theme: "theme-g1", gradeCode: "101", d1Sub: "國語、生活", d2Sub: "數學", hasMusic: false },
+      { name: "二年級", theme: "theme-g2", gradeCode: "201", d1Sub: "國語、生活", d2Sub: "數學", hasMusic: false },
+      { name: "三年級", theme: "theme-g3", gradeCode: "301", d1Sub: "國語、自然、英文", d2Sub: "數學、社會", hasMusic: true },
+      { name: "四年級", theme: "theme-g4", gradeCode: "401", d1Sub: "國語、自然、英文", d2Sub: "數學、社會", hasMusic: true },
+      { name: "五年級", theme: "theme-g5", gradeCode: "501", d1Sub: "國語、自然、英文", d2Sub: "數學、社會", hasMusic: true },
+      { name: "六年級", theme: "theme-g6", gradeCode: "601", d1Sub: "國語、自然、英文", d2Sub: "數學、社會", hasMusic: true }
+    ];
+
+    const timeMap = {};
+    const timeList = Array.isArray(timeNode) ? timeNode : Object.values(timeNode);
+    timeList.forEach(item => { if (item && item.grade) timeMap[String(item.grade)] = item; });
+
+    let html = "";
+    gradeConfigs.forEach(g => {
+      let downloadLinkHtml = `<span class="status-empty">-</span>`;
+      
+    if (g.hasMusic) {
+  const gradeData = timeMap[g.gradeCode];
+  const rawAudioUrl = gradeData ? (gradeData["3music"] || "") : "";
+  
+  if (rawAudioUrl) {
+    // 💡 點擊時改為呼叫 downloadAudioFile 函式，並帶入該年級名稱作為下載檔名
+    downloadLinkHtml = `<a href="javascript:void(0)" onclick="downloadAudioFile('${rawAudioUrl}', '${g.name}_英聽測驗音檔')" class="action-link">下載音檔</a>`;
+  } else {
+    downloadLinkHtml = `<span class="status-empty" style="color:#ef4444; font-weight:600;">未上傳</span>`;
+  }
+}
+
+      const separator = classUrls.includes('?') ? '&' : '?';
+      const gradePrefix = g.gradeCode.charAt(0);
+      const day1Url = `${classUrls}${separator}grade=${gradePrefix}01`;
+      const day2Url = `${classUrls}${separator}grade=${gradePrefix}02`;
+
+      html += `
+        <div class="grade-wrapper ${g.theme}">
+          <div class="grade-header">${g.name}</div>
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 20%;">考試日期</th>
+                <th style="width: 40%;">測驗科目</th>
+                <th style="width: 16%; text-align: center;">英聽下載</th>
+                <th style="text-align: center;">測驗網址</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style="font-weight: 600;">1️⃣第一天</td>
+                <td>${g.d1Sub}</td>
+                <td style="text-align: center;">${downloadLinkHtml}</td>
+                <td style="text-align: center;"><a href="${day1Url}" target="_blank" class="btn-open-url">開啟網址 ➜</a></td>
+              </tr>
+              <tr>
+                <td style="font-weight: 600;">2️⃣第二天</td>
+                <td>${g.d2Sub}</td>
+                <td style="text-align: center;"><span class="status-empty">-</span></td>
+                <td style="text-align: center;"><a href="${day2Url}" target="_blank" class="btn-open-url">開啟網址 ➜</a></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>`;
+    });
+    container.innerHTML = html;
+  }
+
+  // 上傳介面與驗證碼處理
+  function selectUploadGrade(gradeCode, gradeName) {
+    currentSelectedGradeCode = gradeCode;
+    currentSelectedGradeName = gradeName;
+    document.querySelectorAll('.grade-btn').forEach(btn => btn.classList.remove('active'));
+    document.getElementById(`btn-${gradeCode}`).classList.add('active');
+    document.getElementById('selectedGradeText').innerText = `${gradeName} (${gradeCode})`;
+    document.getElementById('pageAuthStep').classList.remove('hidden');
+    document.getElementById('idSuffixInput').value = '';
+    document.getElementById('captchaInput').value = '';
+    generateCaptcha();
+  }
+
+  function resetUploadForm() {
+    currentSelectedGradeCode = ''; currentSelectedGradeName = '';
+    document.querySelectorAll('.grade-btn').forEach(btn => btn.classList.remove('active'));
+    document.getElementById('pageAuthStep').classList.add('hidden');
+    document.getElementById('pageUploadStep').classList.add('hidden');
+    document.getElementById('uploadFormControls').classList.remove('hidden');
+    document.getElementById('uploadSpinner').classList.add('hidden');
+    document.getElementById('audioFileInput').value = '';
+  }
+
+  function generateCaptcha() {
+    const canvas = document.getElementById('captchaCanvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    generatedCaptchaCode = Math.floor(1000 + Math.random() * 9000).toString();
+    ctx.fillStyle = '#f8fafc'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    for (let i = 0; i < 4; i++) {
+      ctx.strokeStyle = `rgba(${Math.random()*150},${Math.random()*150},${Math.random()*150},0.3)`;
+      ctx.beginPath(); ctx.moveTo(Math.random() * canvas.width, Math.random() * canvas.height);
+      ctx.lineTo(Math.random() * canvas.width, Math.random() * canvas.height); ctx.stroke();
+    }
+    ctx.font = 'bold 20px Arial'; ctx.fillStyle = '#1e3a8a'; ctx.textBaseline = 'middle';
+    for (let i = 0; i < generatedCaptchaCode.length; i++) {
+      ctx.save(); ctx.translate(20 + i * 24, canvas.height / 2);
+      ctx.rotate((Math.random() * 20 - 10) * Math.PI / 180);
+      ctx.fillText(generatedCaptchaCode[i], 0, 0); ctx.restore();
+    }
+  }
+
+  function processPageVerify() {
+    const idSuffix = document.getElementById('idSuffixInput').value.trim();
+    const captchaInput = document.getElementById('captchaInput').value.trim();
+    if (!idSuffix || idSuffix.length !== 6) { customAlert('請輸入身分證字號後六碼！'); return; }
+    if (captchaInput !== generatedCaptchaCode) { customAlert('圖形驗證碼錯誤，請重新輸入！'); generateCaptcha(); document.getElementById('captchaInput').value = ''; return; }
+    
+    document.getElementById('teacherName').innerText = currentSelectedGradeName;
+    document.getElementById('pageAuthStep').classList.add('hidden');
+    document.getElementById('pageUploadStep').classList.remove('hidden');
+  }
+
+  // 核心改寫：真實上傳至 Supabase Storage 並更新 Firebase 網址
+  async function processPageUpload() {
+    const fileInput = document.getElementById('audioFileInput');
+    const file = fileInput.files[0];
+    if (!file) { customAlert('請先選取要上傳的音檔檔案！'); return; }
+
+    document.getElementById('uploadFormControls').classList.add('hidden');
+    document.getElementById('uploadSpinner').classList.remove('hidden');
+
+    try {
+      // 1. 產生不重複的安全純英數字檔名
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${currentSelectedGradeCode}_${Date.now()}.${fileExt}`;
+      
+      // 2. 使用 SDK 上傳至 Supabase 儲存桶 'exam'
+      const { data: uploadData, error: uploadError } = await supabaseClient.storage
+        .from('exam')
+        .upload(fileName, file, {
+          cacheControl: '3600',
+          upsert: true
+        });
+
+      if (uploadError) throw uploadError;
+
+      // 3. 取得 Supabase 的 Public 公開直連網址
+      const { data: urlData } = supabaseClient.storage
+        .from('exam')
+        .getPublicUrl(fileName);
+      
+      const supabasePublicUrl = urlData.publicUrl;
+
+      // 4. 將網址即時同步回寫至 Firebase DB
+      const timeRef = database.ref('exam/時間');
+      const snapshot = await timeRef.once('value');
+      let isUpdated = false;
+
+      snapshot.forEach(childSnapshot => {
+        if (String(childSnapshot.val().grade) === currentSelectedGradeCode) {
+          childSnapshot.ref.update({ '3music': supabasePublicUrl });
+          isUpdated = true;
+        }
+      });
+
+      if (!isUpdated) {
+        await timeRef.push({
+          grade: currentSelectedGradeCode,
+          '3music': supabasePublicUrl
+        });
+      }
+
+      // 5. 上傳成功後的介面收尾
+      document.getElementById('uploadSpinner').classList.add('hidden');
+      customAlert(`🎉 ${currentSelectedGradeName} 英聽音檔上傳成功！\n檔案已妥善儲存至 Supabase，並已同步更新網頁下載連結。`);
+      closeUploadModal();
+
+    } catch (err) {
+      console.error("Supabase 上傳出錯：", err);
+      document.getElementById('uploadSpinner').classList.add('hidden');
+      document.getElementById('uploadFormControls').classList.remove('hidden');
+      customAlert('儲存失敗，請檢查網路或權限設定：\n' + err.message);
+    }
+  }
+</script>
+</body>
+</html>
