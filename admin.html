@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firebase 考試時間報表管理</title>
+    <style>
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            padding: 20px; 
+            background-color: #f9f9f9;
+        }
+        h2 { color: #333; margin-bottom: 5px; }
+        .clock-container {
+            font-size: 18px;
+            font-weight: bold;
+            color: #d9534f;
+            background: #fff3f3;
+            border: 1px solid #f5c6cb;
+            padding: 10px 15px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            display: inline-block;
+        }
+        .info { background: #e9ecef; padding: 10px; border-radius: 5px; margin-bottom: 20px; font-size: 14px; }
+        table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            background-color: white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        th, td { 
+            border: 1px solid #ddd; 
+            padding: 10px; 
+            text-align: left; 
+            font-size: 14px;
+        }
+        th { 
+            background-color: #007bff; 
+            color: white; 
+            white-space: nowrap; 
+        }
+        input[type="text"], input[type="number"] { 
+            width: 100%; 
+            padding: 6px; 
+            box-sizing: border-box; 
+            border: 1px solid #ccc; 
+            border-radius: 4px;
+        }
+        input:focus { border-color: #007bff; outline: none; }
+        .btn-save { 
+            padding: 8px 12px; 
+            background-color: #28a745; 
+            color: white; 
+            border: none; 
+            border-radius: 4px; 
+            cursor: pointer; 
+            font-weight: bold;
+        }
+        .btn-save:hover { background-color: #218838; }
+        .loading { color: #666; font-style: italic; }
+
+        /* --- 自訂彈跳視窗 (Modal) 樣式 --- */
+        .modal-overlay {
+            display: none; /* 預設隱藏 */
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0.4); /* 半透明黑色背景 */
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-box {
+            background-color: #fff;
+            padding: 25px 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+            text-align: center;
+            min-width: 300px;
+            max-width: 400px;
+            animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        @keyframes popIn {
+            from { opacity: 0; transform: scale(0.8); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        .modal-icon { font-size: 40px; margin-bottom: 10px; }
+        .modal-message { font-size: 16px; color: #333; margin-bottom: 20px; white-space: pre-wrap;}
+        .btn-confirm {
+            background-color: #0d6efd;
+            color: white;
+            padding: 8px 25px;
+            border: none;
+            border-radius: 4px;
+            font-size: 15px;
+            cursor: pointer;
+        }
+        .btn-confirm:hover { background-color: #0b5ed7; }
+    </style>
+</head>
+<body>
+
+    <div class="clock-container">
+        ⏰ 台灣標準時間：<span id="tw-clock">載入中...</span>
+    </div>
+
+    <h2>考試時間報表管理系統</h2>
+    <div class="info">
+        資料庫來源：<code>exam-e38aa-default-rtdb.asia-southeast1.firebasedatabase.app/exam/時間</code>
+    </div>
+    
+    <div id="table-container">
+        <p class="loading">連線至 Firebase 中，請稍候...</p>
+    </div>
+
+    <div id="custom-modal" class="modal-overlay">
+        <div class="modal-box">
+            <div id="modal-icon" class="modal-icon">✅</div>
+            <div id="modal-message" class="modal-message">訊息內容</div>
+            <button class="btn-confirm" onclick="window.closeModal()">確定</button>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+        import { getDatabase, ref, onValue, update } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js";
+
+        // 1. 初始化 Firebase 設定
+        const firebaseConfig = {
+            databaseURL: "https://exam-e38aa-default-rtdb.asia-southeast1.firebasedatabase.app"
+        };
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+        // 彈跳視窗控制函數
+        window.showModal = function(message, isSuccess) {
+            const modal = document.getElementById('custom-modal');
+            const iconElement = document.getElementById('modal-icon');
+            const messageElement = document.getElementById('modal-message');
+
+            iconElement.innerHTML = isSuccess ? '✅' : '❌';
+            messageElement.innerText = message;
+            modal.style.display = 'flex'; // 顯示 Modal 並且居中
+        };
+
+        window.closeModal = function() {
+            document.getElementById('custom-modal').style.display = 'none';
+        };
+
+        // 台灣標準時間時鐘功能
+        function updateClock() {
+            const now = new Date();
+            const twTimeStr = now.toLocaleString('zh-TW', { 
+                timeZone: 'Asia/Taipei',
+                hour12: false,
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+            document.getElementById('tw-clock').innerText = twTimeStr;
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // 定義中英文對照表與嚴格排序
+        const columnMapping = {
+            'grade': '班級/年級',
+            '1subject': '第一節科目', '1start': '第一節開始', '1end': '第一節結束', '1music': '第一節音樂',
+            '2subject': '第二節科目', '2start': '第二節開始', '2end': '第二節結束', '2music': '第二節音樂',
+            '3subject': '第三節科目', '3start': '第三節開始', '3end': '第三節結束', '3music': '第三節音樂',
+            '修改時間': '修改時間',
+            '最後修改者': '最後修改者'
+        };
+
+        const targetOrder = [
+            'grade',
+            '1subject', '1start', '1end', '1music',
+            '2subject', '2start', '2end', '2music',
+            '3subject', '3start', '3end', '3music',
+            '修改時間', '最後修改者'
+        ];
+
+        // 監聽 exam/時間 節點
+        const timeRef = ref(db, 'exam/時間');
+
+        onValue(timeRef, (snapshot) => {
+            const data = snapshot.val();
+            renderTable(data);
+        }, (error) => {
+            document.getElementById('table-container').innerHTML = 
+                `<p style="color:red; font-weight:bold;">讀取失敗！請確認您的 Firebase 資料庫規則 (Rules) 是否允許公開「讀取」。<br>錯誤代碼：${error.message}</p>`;
+        });
+
+        // 渲染報表函數
+        function renderTable(data) {
+            const container = document.getElementById('table-container');
+            if (!data) {
+                container.innerHTML = "<p>資料庫目前沒有資料。</p>";
+                return;
+            }
+
+            let html = '<table><thead><tr>';
+            html += '<th>索引 (ID)</th>';
+            targetOrder.forEach(colKey => {
+                const chineseName = columnMapping[colKey] || colKey;
+                html += `<th>${chineseName}</th>`;
+            });
+            html += '<th>操作</th></tr></thead><tbody>';
+
+            Object.entries(data).forEach(([key, row]) => {
+                if (!row) return; 
+                html += `<tr id="row-${key}">`;
+                html += `<td><b>${key}</b></td>`;
+                
+                targetOrder.forEach(colKey => {
+                    const value = row[colKey] !== undefined ? row[colKey] : '';
+                    const inputType = (colKey === 'grade') ? 'number' : 'text';
+                    const isReadOnly = (colKey === '修改時間') ? 'readonly style="background:#eee;"' : '';
+                    
+                    html += `<td><input type="${inputType}" data-col="${colKey}" value="${value}" ${isReadOnly}></td>`;
+                });
+
+                html += `<td><button class="btn-save" onclick="window.updateData('${key}')">儲存</button></td>`;
+                html += '</tr>';
+            });
+
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+
+        // 更新資料的函數
+        window.updateData = function(rowKey) {
+            const rowElement = document.getElementById(`row-${rowKey}`);
+            const inputs = rowElement.querySelectorAll('input');
+            const updatedValues = {};
+
+            inputs.forEach(input => {
+                const colName = input.getAttribute('data-col');
+                let val = input.value;
+                if (colName === 'grade' && val !== '') val = Number(val);
+                updatedValues[colName] = val;
+            });
+
+            const now = new Date();
+            updatedValues['修改時間'] = now.toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', hour12: false });
+
+            const rowRef = ref(db, `exam/時間/${rowKey}`);
+            update(rowRef, updatedValues)
+                .then(() => {
+                    // 呼叫自製彈跳視窗，傳遞成功訊息 (True)
+                    window.showModal(`索引 [${rowKey}] 的資料已成功更新！`, true);
+                })
+                .catch((error) => {
+                    // 呼叫自製彈跳視窗，傳遞失敗訊息 (False)
+                    window.showModal(`更新失敗！\n詳細錯誤：${error.message}`, false);
+                });
+        };
+    </script>
+</body>
+</html>
