@@ -804,7 +804,7 @@ async function downloadAudioFile(url, fileName) {
 
       // 5. 上傳成功後的介面收尾
       document.getElementById('uploadSpinner').classList.add('hidden');
-      customAlert(`🎉 ${currentSelectedGradeName} 英聽音檔上傳成功！\n檔案已妥善儲存至 Supabase，並已同步更新網頁下載連結。`);
+      customAlert(`🎉 ${currentSelectedGradeName} 英聽音檔上傳成功！\n檔案已妥善儲存至雲端，並已同步更新網頁下載連結。`);
       closeUploadModal();
 
     } catch (err) {
