@@ -885,20 +885,23 @@ var currentGrade = urlParams.get('grade');
       }
 
       // 改為使用 Fetch 更新 Firebase 資料庫，取代原 GAS 邏輯
-      // 改為使用 Fetch 更新 Firebase 資料庫，取代原 GAS 邏輯
-      async function sendDataToBackend(cls, subject, count, ip) {
+     async function sendDataToBackend(cls, subject, count, ip) {
         var btn = document.querySelector('.submit-btn');
         if (btn) btn.innerText = "傳送中...";
         
         try {
-          let localNow = new Date();
-          localNow.setHours(0, 0, 0, 0); // 保持原本設定為當日凌晨的邏輯
+          // 1. 改用您寫好的 getCorrectedNow() 取得校正後的現在時間
+          let localNow = getCorrectedNow(); 
+          // 移除 localNow.setHours(0, 0, 0, 0); 讓時間保留為真實的當下時間 (例如 10:44)
           
-          // 【修改點 1】使用 toLocaleString 指定台灣時區與 12 小時制，並加上空格以符合您的格式需求
+          // 2. 完整的時間字串，用於寫入資料庫
           let todayDateStr = localNow.toLocaleString('zh-TW', { 
             timeZone: 'Asia/Taipei', 
             hour12: true 
           }).replace('上午', '上午 ').replace('下午', '下午 ');
+
+          // 3. 取得「純日期」字串 (例如 "2026/6/9")，用於稍後比對是否為同一天
+          let dateOnlyStr = localNow.toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei' });
 
           let res = await fetch(`${FIREBASE_DB_URL}/exam/缺考.json`);
           let absences = await res.json() || {};
@@ -909,8 +912,10 @@ var currentGrade = urlParams.get('grade');
           for (let key in absences) {
             if (!isNaN(key)) maxIndex = Math.max(maxIndex, parseInt(key));
             let record = absences[key];
-            // 【修改點 2】將比對條件改為格式化後的 todayDateStr
-            if (record && record.班級 === cls && record.日期 === todayDateStr) {
+            
+            // 4. 【重要修改】比對條件改用 startsWith(dateOnlyStr)
+            // 這樣就算時間不同，只要日期和班級一樣，就能正確抓到同一筆紀錄進行更新
+            if (record && record.班級 === cls && record.日期 && record.日期.startsWith(dateOnlyStr)) {
               targetKey = key;
             }
           }
@@ -919,6 +924,8 @@ var currentGrade = urlParams.get('grade');
             let patchData = {};
             patchData[subject] = parseInt(count);
             patchData.ip = ip;
+            // 每次更新各科缺考人數時，同時將「最後修改時間」更新為當下
+            patchData.日期 = todayDateStr; 
             
             await fetch(`${FIREBASE_DB_URL}/exam/缺考/${targetKey}.json`, {
               method: 'PATCH',
@@ -929,7 +936,7 @@ var currentGrade = urlParams.get('grade');
             let newIndex = maxIndex + 1;
             let newData = {
               ip: ip,
-              日期: todayDateStr, // 【修改點 3】寫入正確的台灣標準時間格式
+              日期: todayDateStr, // 寫入包含真實時間的字串
               班級: cls,
               國語: subject === '國語' ? parseInt(count) : 0,
               數學: subject === '數學' ? parseInt(count) : 0,
