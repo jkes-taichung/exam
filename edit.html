@@ -11,6 +11,9 @@
         .edit-input { width: 60px; }
         .edit-input-text { width: 100px; }
     </style>
+    
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 </head>
 <body>
 
@@ -52,36 +55,39 @@
     </div>
 </div>
 
-<script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { getDatabase, ref, onValue, update, remove } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
-
-    // 已經替換為您專屬的 Firebase 資料庫 URL
+<script>
+    // ==========================================
+    // 1. Firebase V8 初始化 (與時間報表相同)
+    // ==========================================
     const firebaseConfig = {
-        databaseURL: "https://exam-e38aa-default-rtdb.asia-southeast1.firebasedatabase.app" 
+        databaseURL: "https://exam-e38aa-default-rtdb.asia-southeast1.firebasedatabase.app"
     };
+    
+    if (!firebase.apps.length) {
+        firebase.initializeApp(firebaseConfig);
+    }
+    const database = firebase.database();
+    const dbRef = database.ref('缺考'); // 目標資料節點
 
-    // 初始化 Firebase
-    const app = initializeApp(firebaseConfig);
-    const db = getDatabase(app);
-    const dbRef = ref(db, '缺考'); // 目標資料節點
-
-    // 系統狀態
+    // ==========================================
+    // 2. 系統狀態與 DOM 元素
+    // ==========================================
     let allData = [];
     let currentPage = 1;
     const itemsPerPage = 50;
     let selectedIds = new Set();
     let editingId = null;
 
-    // DOM 元素
     const tbody = document.getElementById('tableBody');
     const pagination = document.getElementById('pagination');
     const selectAllCheckbox = document.getElementById('selectAll');
     const btnBulkDelete = document.getElementById('btnBulkDelete');
     const pageInfo = document.getElementById('pageInfo');
 
-    // 1. 監聽並取得所有資料
-    onValue(dbRef, (snapshot) => {
+    // ==========================================
+    // 3. 監聽並取得所有資料 (使用 V8 的 .on('value'))
+    // ==========================================
+    dbRef.on('value', (snapshot) => {
         allData = [];
         snapshot.forEach((childSnapshot) => {
             allData.push({
@@ -89,19 +95,25 @@
                 ...childSnapshot.val()
             });
         });
+        
         // 確保不會停留在空的分頁
         const totalPages = Math.ceil(allData.length / itemsPerPage);
         if (currentPage > totalPages && totalPages > 0) currentPage = totalPages;
         
         renderTable();
         renderPagination();
+    }, (error) => {
+        console.error("讀取資料失敗:", error);
+        tbody.innerHTML = `<tr><td colspan="12" class="text-center text-danger">讀取資料失敗: ${error.message}</td></tr>`;
     });
 
-    // 2. 渲染表格內容
+    // ==========================================
+    // 4. 渲染表格內容
+    // ==========================================
     window.renderTable = function() {
         tbody.innerHTML = '';
         if (allData.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="12" class="text-center">目前沒有資料</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="12" class="text-center">目前資料庫中沒有缺考的資料</td></tr>';
             pageInfo.innerText = `共 0 筆`;
             return;
         }
@@ -117,7 +129,7 @@
             const isEditing = editingId === item.key;
             
             // 安全處理未定義的欄位
-            const getVal = (val) => val !== undefined ? val : '';
+            const getVal = (val) => val !== undefined && val !== null ? val : '';
 
             if (isEditing) {
                 // 編輯模式
@@ -165,7 +177,9 @@
         updateBulkDeleteButton();
     };
 
-    // 3. 渲染分頁按鈕
+    // ==========================================
+    // 5. 渲染分頁按鈕
+    // ==========================================
     window.renderPagination = function() {
         const totalPages = Math.ceil(allData.length / itemsPerPage);
         pagination.innerHTML = '';
@@ -199,7 +213,9 @@
         }
     };
 
-    // 4. 單筆編輯邏輯
+    // ==========================================
+    // 6. 單筆編輯邏輯 (使用 V8 的 .update())
+    // ==========================================
     window.editRow = function(key) {
         editingId = key;
         renderTable(); 
@@ -210,7 +226,7 @@
         renderTable();
     };
 
-    window.saveRow = async function(key) {
+    window.saveRow = function(key) {
         const updates = {
             '班級': document.getElementById(`edit_class_${key}`).value,
             '日期': document.getElementById(`edit_date_${key}`).value,
@@ -222,27 +238,34 @@
             '生活': Number(document.getElementById(`edit_life_${key}`).value) || 0,
         };
 
-        try {
-            await update(ref(db, `缺考/${key}`), updates);
-            editingId = null;
-        } catch (error) {
-            alert('更新失敗: ' + error.message);
-        }
+        database.ref(`缺考/${key}`).update(updates)
+            .then(() => {
+                editingId = null;
+                // 資料庫更新會觸發 .on('value')，自動重新渲染表格
+            })
+            .catch((error) => {
+                alert('更新失敗: ' + error.message);
+            });
     };
 
-    // 5. 單筆刪除邏輯
-    window.deleteRow = async function(key) {
+    // ==========================================
+    // 7. 單筆刪除邏輯 (使用 V8 的 .remove())
+    // ==========================================
+    window.deleteRow = function(key) {
         if (confirm(`確定要刪除 ID: ${key} 的資料嗎？`)) {
-            try {
-                await remove(ref(db, `缺考/${key}`));
-                selectedIds.delete(key);
-            } catch (error) {
-                alert('刪除失敗: ' + error.message);
-            }
+            database.ref(`缺考/${key}`).remove()
+                .then(() => {
+                    selectedIds.delete(key);
+                })
+                .catch((error) => {
+                    alert('刪除失敗: ' + error.message);
+                });
         }
     };
 
-    // 6. 批次選取與刪除邏輯
+    // ==========================================
+    // 8. 批次選取與刪除邏輯
+    // ==========================================
     window.toggleSelection = function(key) {
         if (selectedIds.has(key)) {
             selectedIds.delete(key);
@@ -269,22 +292,25 @@
         btnBulkDelete.innerText = `批次刪除選取項目 (${selectedIds.size})`;
     };
 
-    btnBulkDelete.addEventListener('click', async () => {
+    btnBulkDelete.addEventListener('click', () => {
         if (selectedIds.size === 0) return;
         if (confirm(`確定要刪除選取的 ${selectedIds.size} 筆資料嗎？這將無法復原！`)) {
-            try {
-                const updates = {};
-                selectedIds.forEach(id => {
-                    updates[id] = null; 
+            
+            // 使用多路徑更新 (Multipath update) 進行批次刪除
+            const updates = {};
+            selectedIds.forEach(id => {
+                updates[id] = null; // 設為 null 等同於刪除
+            });
+            
+            dbRef.update(updates)
+                .then(() => {
+                    selectedIds.clear();
+                    selectAllCheckbox.checked = false;
+                    alert('批次刪除成功！');
+                })
+                .catch((error) => {
+                    alert('批次刪除失敗: ' + error.message);
                 });
-                
-                await update(dbRef, updates);
-                selectedIds.clear();
-                selectAllCheckbox.checked = false;
-                alert('批次刪除成功！');
-            } catch (error) {
-                alert('批次刪除失敗: ' + error.message);
-            }
         }
     });
 
