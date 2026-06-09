@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>缺考資料管理報表</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { padding: 20px; background-color: #f8f9fa; }
+        .table-responsive { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .edit-input { width: 60px; }
+        .edit-input-text { width: 100px; }
+    </style>
+</head>
+<body>
+
+<div class="container-fluid">
+    <h2 class="mb-4">缺考資料管理</h2>
+    
+    <div class="table-responsive">
+        <div class="d-flex justify-content-between mb-3">
+            <button id="btnBulkDelete" class="btn btn-danger" disabled>批次刪除選取項目</button>
+            <div id="pageInfo" class="align-self-center fw-bold"></div>
+        </div>
+
+        <table class="table table-hover table-bordered align-middle">
+            <thead class="table-dark">
+                <tr>
+                    <th><input type="checkbox" id="selectAll"></th>
+                    <th>ID / Key</th>
+                    <th>班級</th>
+                    <th>日期</th>
+                    <th>IP</th>
+                    <th>國語</th>
+                    <th>數學</th>
+                    <th>英文</th>
+                    <th>自然</th>
+                    <th>社會</th>
+                    <th>生活</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody id="tableBody">
+                <tr><td colspan="12" class="text-center">資料載入中...</td></tr>
+            </tbody>
+        </table>
+
+        <nav>
+            <ul class="pagination justify-content-center" id="pagination">
+                </ul>
+        </nav>
+    </div>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getDatabase, ref, onValue, update, remove } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+    // 已經替換為您專屬的 Firebase 資料庫 URL
+    const firebaseConfig = {
+        databaseURL: "https://exam-e38aa-default-rtdb.asia-southeast1.firebasedatabase.app" 
+    };
+
+    // 初始化 Firebase
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    const dbRef = ref(db, '缺考'); // 目標資料節點
+
+    // 系統狀態
+    let allData = [];
+    let currentPage = 1;
+    const itemsPerPage = 50;
+    let selectedIds = new Set();
+    let editingId = null;
+
+    // DOM 元素
+    const tbody = document.getElementById('tableBody');
+    const pagination = document.getElementById('pagination');
+    const selectAllCheckbox = document.getElementById('selectAll');
+    const btnBulkDelete = document.getElementById('btnBulkDelete');
+    const pageInfo = document.getElementById('pageInfo');
+
+    // 1. 監聽並取得所有資料
+    onValue(dbRef, (snapshot) => {
+        allData = [];
+        snapshot.forEach((childSnapshot) => {
+            allData.push({
+                key: childSnapshot.key,
+                ...childSnapshot.val()
+            });
+        });
+        // 確保不會停留在空的分頁
+        const totalPages = Math.ceil(allData.length / itemsPerPage);
+        if (currentPage > totalPages && totalPages > 0) currentPage = totalPages;
+        
+        renderTable();
+        renderPagination();
+    });
+
+    // 2. 渲染表格內容
+    window.renderTable = function() {
+        tbody.innerHTML = '';
+        if (allData.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="12" class="text-center">目前沒有資料</td></tr>';
+            pageInfo.innerText = `共 0 筆`;
+            return;
+        }
+
+        const startIndex = (currentPage - 1) * itemsPerPage;
+        const endIndex = startIndex + itemsPerPage;
+        const pageData = allData.slice(startIndex, endIndex);
+
+        pageInfo.innerText = `第 ${currentPage} 頁 / 共 ${Math.ceil(allData.length / itemsPerPage)} 頁 (總計 ${allData.length} 筆)`;
+
+        pageData.forEach(item => {
+            const tr = document.createElement('tr');
+            const isEditing = editingId === item.key;
+            
+            // 安全處理未定義的欄位
+            const getVal = (val) => val !== undefined ? val : '';
+
+            if (isEditing) {
+                // 編輯模式
+                tr.innerHTML = `
+                    <td></td>
+                    <td>${item.key}</td>
+                    <td><input type="text" class="form-control edit-input-text" id="edit_class_${item.key}" value="${getVal(item['班級'])}"></td>
+                    <td><input type="text" class="form-control edit-input-text" id="edit_date_${item.key}" value="${getVal(item['日期'])}"></td>
+                    <td>${getVal(item.ip)}</td>
+                    <td><input type="number" class="form-control edit-input" id="edit_chi_${item.key}" value="${getVal(item['國語'])}"></td>
+                    <td><input type="number" class="form-control edit-input" id="edit_math_${item.key}" value="${getVal(item['數學'])}"></td>
+                    <td><input type="number" class="form-control edit-input" id="edit_eng_${item.key}" value="${getVal(item['英文'])}"></td>
+                    <td><input type="number" class="form-control edit-input" id="edit_sci_${item.key}" value="${getVal(item['自然'])}"></td>
+                    <td><input type="number" class="form-control edit-input" id="edit_soc_${item.key}" value="${getVal(item['社會'])}"></td>
+                    <td><input type="number" class="form-control edit-input" id="edit_life_${item.key}" value="${getVal(item['生活'])}"></td>
+                    <td>
+                        <button class="btn btn-sm btn-success mb-1" onclick="saveRow('${item.key}')">儲存</button>
+                        <button class="btn btn-sm btn-secondary mb-1" onclick="cancelEdit()">取消</button>
+                    </td>
+                `;
+            } else {
+                // 顯示模式
+                const isChecked = selectedIds.has(item.key) ? 'checked' : '';
+                tr.innerHTML = `
+                    <td><input type="checkbox" class="row-checkbox" value="${item.key}" ${isChecked} onchange="toggleSelection('${item.key}')"></td>
+                    <td>${item.key}</td>
+                    <td>${getVal(item['班級'])}</td>
+                    <td>${getVal(item['日期'])}</td>
+                    <td>${getVal(item.ip)}</td>
+                    <td>${getVal(item['國語'])}</td>
+                    <td>${getVal(item['數學'])}</td>
+                    <td>${getVal(item['英文'])}</td>
+                    <td>${getVal(item['自然'])}</td>
+                    <td>${getVal(item['社會'])}</td>
+                    <td>${getVal(item['生活'])}</td>
+                    <td>
+                        <button class="btn btn-sm btn-primary mb-1" onclick="editRow('${item.key}')">修改</button>
+                        <button class="btn btn-sm btn-danger mb-1" onclick="deleteRow('${item.key}')">刪除</button>
+                    </td>
+                `;
+            }
+            tbody.appendChild(tr);
+        });
+
+        updateBulkDeleteButton();
+    };
+
+    // 3. 渲染分頁按鈕
+    window.renderPagination = function() {
+        const totalPages = Math.ceil(allData.length / itemsPerPage);
+        pagination.innerHTML = '';
+
+        if (totalPages <= 1) return;
+
+        // 上一頁
+        pagination.innerHTML += `<li class="page-item ${currentPage === 1 ? 'disabled' : ''}">
+            <a class="page-link" href="#" onclick="changePage(${currentPage - 1})">上一頁</a>
+        </li>`;
+
+        // 頁碼
+        for (let i = 1; i <= totalPages; i++) {
+            pagination.innerHTML += `<li class="page-item ${currentPage === i ? 'active' : ''}">
+                <a class="page-link" href="#" onclick="changePage(${i})">${i}</a>
+            </li>`;
+        }
+
+        // 下一頁
+        pagination.innerHTML += `<li class="page-item ${currentPage === totalPages ? 'disabled' : ''}">
+            <a class="page-link" href="#" onclick="changePage(${currentPage + 1})">下一頁</a>
+        </li>`;
+    };
+
+    window.changePage = function(page) {
+        const totalPages = Math.ceil(allData.length / itemsPerPage);
+        if (page >= 1 && page <= totalPages) {
+            currentPage = page;
+            renderTable();
+            renderPagination();
+        }
+    };
+
+    // 4. 單筆編輯邏輯
+    window.editRow = function(key) {
+        editingId = key;
+        renderTable(); 
+    };
+
+    window.cancelEdit = function() {
+        editingId = null;
+        renderTable();
+    };
+
+    window.saveRow = async function(key) {
+        const updates = {
+            '班級': document.getElementById(`edit_class_${key}`).value,
+            '日期': document.getElementById(`edit_date_${key}`).value,
+            '國語': Number(document.getElementById(`edit_chi_${key}`).value) || 0,
+            '數學': Number(document.getElementById(`edit_math_${key}`).value) || 0,
+            '英文': Number(document.getElementById(`edit_eng_${key}`).value) || 0,
+            '自然': Number(document.getElementById(`edit_sci_${key}`).value) || 0,
+            '社會': Number(document.getElementById(`edit_soc_${key}`).value) || 0,
+            '生活': Number(document.getElementById(`edit_life_${key}`).value) || 0,
+        };
+
+        try {
+            await update(ref(db, `缺考/${key}`), updates);
+            editingId = null;
+        } catch (error) {
+            alert('更新失敗: ' + error.message);
+        }
+    };
+
+    // 5. 單筆刪除邏輯
+    window.deleteRow = async function(key) {
+        if (confirm(`確定要刪除 ID: ${key} 的資料嗎？`)) {
+            try {
+                await remove(ref(db, `缺考/${key}`));
+                selectedIds.delete(key);
+            } catch (error) {
+                alert('刪除失敗: ' + error.message);
+            }
+        }
+    };
+
+    // 6. 批次選取與刪除邏輯
+    window.toggleSelection = function(key) {
+        if (selectedIds.has(key)) {
+            selectedIds.delete(key);
+        } else {
+            selectedIds.add(key);
+        }
+        updateBulkDeleteButton();
+    };
+
+    selectAllCheckbox.addEventListener('change', (e) => {
+        const isChecked = e.target.checked;
+        const startIndex = (currentPage - 1) * itemsPerPage;
+        const pageData = allData.slice(startIndex, startIndex + itemsPerPage);
+        
+        pageData.forEach(item => {
+            if (isChecked) selectedIds.add(item.key);
+            else selectedIds.delete(item.key);
+        });
+        renderTable();
+    });
+
+    window.updateBulkDeleteButton = function() {
+        btnBulkDelete.disabled = selectedIds.size === 0;
+        btnBulkDelete.innerText = `批次刪除選取項目 (${selectedIds.size})`;
+    };
+
+    btnBulkDelete.addEventListener('click', async () => {
+        if (selectedIds.size === 0) return;
+        if (confirm(`確定要刪除選取的 ${selectedIds.size} 筆資料嗎？這將無法復原！`)) {
+            try {
+                const updates = {};
+                selectedIds.forEach(id => {
+                    updates[id] = null; 
+                });
+                
+                await update(dbRef, updates);
+                selectedIds.clear();
+                selectAllCheckbox.checked = false;
+                alert('批次刪除成功！');
+            } catch (error) {
+                alert('批次刪除失敗: ' + error.message);
+            }
+        }
+    });
+
+</script>
+</body>
+</html>
