@@ -463,7 +463,7 @@ async function downloadAudioFile(url, fileName) {
       const timeNode = examData.時間 || [];
       const classesNode = examData.班級 || [];
       const absenceNode = examData.缺考 || [];
-    const classUrls = "https://exam-e38aa.web.app/index.html";
+    const classUrls = "https://jkes-taichung.github.io/exam/index.html";
 
       renderGradeTablesFromFirebase(timeNode, classUrls);
       buildAbsenceTablesWithPreload(classesNode, absenceNode);
