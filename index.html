@@ -885,14 +885,20 @@ var currentGrade = urlParams.get('grade');
       }
 
       // 改為使用 Fetch 更新 Firebase 資料庫，取代原 GAS 邏輯
+      // 改為使用 Fetch 更新 Firebase 資料庫，取代原 GAS 邏輯
       async function sendDataToBackend(cls, subject, count, ip) {
         var btn = document.querySelector('.submit-btn');
         if (btn) btn.innerText = "傳送中...";
         
         try {
           let localNow = new Date();
-          localNow.setHours(0, 0, 0, 0);
-          let todayDateISO = localNow.toISOString(); 
+          localNow.setHours(0, 0, 0, 0); // 保持原本設定為當日凌晨的邏輯
+          
+          // 【修改點 1】使用 toLocaleString 指定台灣時區與 12 小時制，並加上空格以符合您的格式需求
+          let todayDateStr = localNow.toLocaleString('zh-TW', { 
+            timeZone: 'Asia/Taipei', 
+            hour12: true 
+          }).replace('上午', '上午 ').replace('下午', '下午 ');
 
           let res = await fetch(`${FIREBASE_DB_URL}/exam/缺考.json`);
           let absences = await res.json() || {};
@@ -903,7 +909,8 @@ var currentGrade = urlParams.get('grade');
           for (let key in absences) {
             if (!isNaN(key)) maxIndex = Math.max(maxIndex, parseInt(key));
             let record = absences[key];
-            if (record && record.班級 === cls && record.日期 === todayDateISO) {
+            // 【修改點 2】將比對條件改為格式化後的 todayDateStr
+            if (record && record.班級 === cls && record.日期 === todayDateStr) {
               targetKey = key;
             }
           }
@@ -922,7 +929,7 @@ var currentGrade = urlParams.get('grade');
             let newIndex = maxIndex + 1;
             let newData = {
               ip: ip,
-              日期: todayDateISO,
+              日期: todayDateStr, // 【修改點 3】寫入正確的台灣標準時間格式
               班級: cls,
               國語: subject === '國語' ? parseInt(count) : 0,
               數學: subject === '數學' ? parseInt(count) : 0,
@@ -955,7 +962,6 @@ var currentGrade = urlParams.get('grade');
           }
         }
       }
-
       
     </script>
   </body>
