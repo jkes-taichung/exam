@@ -459,12 +459,18 @@ var currentGrade = urlParams.get('grade');
       }
 
       // 改用第三方 API (WorldTimeAPI) 來抓取標準時間
+// 已更新：改用更穩定的 TimeAPI.io 來抓取標準時間
       async function syncServerTime(isInitialLoad) {
         try {
-          let response = await fetch('https://worldtimeapi.org/api/timezone/Asia/Taipei');
+          // 發送請求到 TimeAPI.io
+          let response = await fetch('https://timeapi.io/api/Time/current/zone?timeZone=Asia/Taipei');
           let data = await response.json();
-          let serverTimestamp = new Date(data.utc_datetime).getTime();
+          
+          // TimeAPI.io 回傳的 dateTime 格式如："2026-06-12T11:05:59.1234567"
+          // 為了確保各家瀏覽器都能精準解析為台灣時間，我們在尾巴補上 "+08:00"
+          let serverTimestamp = new Date(data.dateTime + "+08:00").getTime();
           let localTimestamp = new Date().getTime();
+          
           timeOffset = serverTimestamp - localTimestamp; 
         } catch (err) {
           console.warn("無法取得伺服器時間，使用本地時間");
