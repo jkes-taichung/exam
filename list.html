@@ -824,22 +824,34 @@ async function processPageVerify() {
       
       const supabasePublicUrl = urlData.publicUrl;
 
-      // 4. 將網址即時同步回寫至 Firebase DB
+      // 4. 將網址與修改者資訊即時同步回寫至 Firebase DB
       const timeRef = database.ref('exam/時間');
       const snapshot = await timeRef.once('value');
       let isUpdated = false;
 
+      // 產生符合截圖格式的當下時間字串 (例如: "2026/6/9 08:14:57")
+      const now = new Date();
+      const nowTimeStr = `${now.getFullYear()}/${now.getMonth() + 1}/${now.getDate()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+
       snapshot.forEach(childSnapshot => {
         if (String(childSnapshot.val().grade) === currentSelectedGradeCode) {
-          childSnapshot.ref.update({ '3music': supabasePublicUrl });
+          // ▼ 將最後修改者與修改時間寫入現有節點 ▼
+          childSnapshot.ref.update({ 
+            '3music': supabasePublicUrl,
+            '最後修改者': loggedInUserName,
+            '修改時間': nowTimeStr
+          });
           isUpdated = true;
         }
       });
 
       if (!isUpdated) {
+        // ▼ 若無該年級節點，新增時也一併寫入資訊 ▼
         await timeRef.push({
           grade: currentSelectedGradeCode,
-          '3music': supabasePublicUrl
+          '3music': supabasePublicUrl,
+          '最後修改者': loggedInUserName,
+          '修改時間': nowTimeStr
         });
       }
 
