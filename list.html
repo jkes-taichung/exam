@@ -705,7 +705,7 @@ async function downloadAudioFile(url, fileName) {
     currentSelectedGradeName = gradeName;
     document.querySelectorAll('.grade-btn').forEach(btn => btn.classList.remove('active'));
     document.getElementById(`btn-${gradeCode}`).classList.add('active');
-    document.getElementById('selectedGradeText').innerText = `${gradeName} (${gradeCode})`;
+    document.getElementById('selectedGradeText').innerText = `${gradeName}`;
     document.getElementById('pageAuthStep').classList.remove('hidden');
     document.getElementById('idSuffixInput').value = '';
     document.getElementById('captchaInput').value = '';
