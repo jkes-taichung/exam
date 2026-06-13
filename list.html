@@ -794,29 +794,69 @@ async function processPageVerify() {
   }
 }
 
-  // 核心改寫：真實上傳至 Supabase Storage 並更新 Firebase 網址
+  // 💡 新增的輔助函式：用來檢查 WAV 檔案內部的二進制編碼
+  function checkWavIsStandardPCM(file) {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = function (e) {
+        const buffer = e.target.result;
+        const view = new DataView(buffer);
+
+        try {
+          // 檢查是否為標準 RIFF WAVE 格式
+          const riff = String.fromCharCode(view.getUint8(0), view.getUint8(1), view.getUint8(2), view.getUint8(3));
+          const wave = String.fromCharCode(view.getUint8(8), view.getUint8(9), view.getUint8(10), view.getUint8(11));
+
+          if (riff !== 'RIFF' || wave !== 'WAVE') {
+            resolve({ valid: false, reason: '此檔案非標準的 WAV 格式。' });
+            return;
+          }
+
+          // 讀取編碼格式代碼 (位置在第 20 位元組，2 bytes)
+          // 1 代表 Linear PCM (網頁唯一支援)，3 代表 IEEE Float，2/17 代表 ADPCM (網頁無法播放)
+          const formatTag = view.getUint16(20, true);
+          const bitsPerSample = view.getUint16(34, true);
+
+          if (formatTag !== 1) {
+            let codecName = '非 PCM 壓縮編碼 (如 ADPCM 或 MP3-WAV)';
+            if (formatTag === 3) codecName = 'IEEE Float (浮點數編碼)';
+            resolve({ valid: false, reason: `編碼格式為 ${codecName}，網頁播放器無法讀取。` });
+          } else {
+            resolve({ valid: true, bits: bitsPerSample });
+          }
+        } catch (err) {
+          resolve({ valid: false, reason: '無法解析檔案標頭結構。' });
+        }
+      };
+      // 只讀取前 44 個位元組（WAV 的標頭大小）
+      reader.readAsArrayBuffer(file.slice(0, 44));
+    });
+  }
+
+  // 💡 主要的上傳函式
   async function processPageUpload() {
     const fileInput = document.getElementById('audioFileInput');
     const file = fileInput.files[0];
     if (!file) { customAlert('請先選取要上傳的音檔檔案！'); return; }
 
-    // === 💡 新增功能 1：前端音檔格式防呆檢查 ===
     const fileNameLower = file.name.toLowerCase();
     
-    // 阻擋完全無法在網頁播放的 WMA 格式
+    // 1. 攔截絕對不能播的 WMA
     if (fileNameLower.endsWith('.wma')) {
-      customAlert('❌ 瀏覽器不支援 .wma 格式的網頁原生播放！\n請先將檔案轉為 .mp3 格式後再重新上傳。');
+      customAlert('❌ 瀏覽器不支援 .wma 格式網頁播放！\n請將檔案重新轉檔。');
       return;
     }
     
-    // 針對相容性不穩定的 WAV 格式給予提示
+    // 2. 針對一定要用的 WAV 進行深度二進制檢查
     if (fileNameLower.endsWith('.wav')) {
-      if (!confirm('⚠️ 您選取的是 .wav 檔。\n部分錄音設備匯出的 wav 編碼可能導致網頁播放器無法讀取 (顯示 0:00)。\n如果上傳後無法聆聽，請轉為 .mp3 檔再試。是否繼續上傳？')) {
+      const wavCheck = await checkWavIsStandardPCM(file);
+      if (!wavCheck.valid) {
+        customAlert(`❌ 無法上傳！此 WAV 檔案 ${wavCheck.reason}\n\n【解決方法】:\n請老師使用轉檔軟體或 Audacity，將此檔案重新匯出為「標準 PCM 16-bit」的 WAV 格式，或者直接轉為 .mp3 再行上傳。`);
         return;
       }
     }
 
-    // 顯示載入動畫，隱藏控制項
+    // 啟動上傳動畫
     document.getElementById('uploadFormControls').classList.add('hidden');
     document.getElementById('uploadSpinner').classList.remove('hidden');
 
@@ -831,7 +871,7 @@ async function processPageVerify() {
         .upload(fileName, file, {
           cacheControl: '3600',
           upsert: true,
-          contentType: file.type || 'audio/wav' // 👈 💡 新增功能 2：強制指定 Content-Type，修復網頁播放器 0:00 的大魔王
+          contentType: file.type || 'audio/wav' // 宣告正確的網頁類型
         });
 
       if (uploadError) throw uploadError;
@@ -848,16 +888,14 @@ async function processPageVerify() {
       const snapshot = await timeRef.once('value');
       let isUpdated = false;
 
-      // 產生當下時間字串 (格式如: "2026/6/9 08:14:57")
       const now = new Date();
       const nowTimeStr = `${now.getFullYear()}/${now.getMonth() + 1}/${now.getDate()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
 
       snapshot.forEach(childSnapshot => {
         if (String(childSnapshot.val().grade) === currentSelectedGradeCode) {
-          // 將最後修改者、修改時間、音檔網址同步寫入現有節點
           childSnapshot.ref.update({ 
             '3music': supabasePublicUrl,
-            '最後修改者': loggedInUserName, // 👈 帶入驗證成功的老師姓名
+            '最後修改者': loggedInUserName,
             '修改時間': nowTimeStr
           });
           isUpdated = true;
@@ -865,7 +903,6 @@ async function processPageVerify() {
       });
 
       if (!isUpdated) {
-        // 若原本沒有該年級節點，新增時一併寫入
         await timeRef.push({
           grade: currentSelectedGradeCode,
           '3music': supabasePublicUrl,
