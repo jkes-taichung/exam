@@ -742,16 +742,56 @@ async function downloadAudioFile(url, fileName) {
     }
   }
 
-  function processPageVerify() {
-    const idSuffix = document.getElementById('idSuffixInput').value.trim();
-    const captchaInput = document.getElementById('captchaInput').value.trim();
-    if (!idSuffix || idSuffix.length !== 6) { customAlert('請輸入身分證字號後六碼！'); return; }
-    if (captchaInput !== generatedCaptchaCode) { customAlert('圖形驗證碼錯誤，請重新輸入！'); generateCaptcha(); document.getElementById('captchaInput').value = ''; return; }
+async function processPageVerify() {
+  const idSuffix = document.getElementById('idSuffixInput').value.trim();
+  const captchaInput = document.getElementById('captchaInput').value.trim();
+  
+  if (!idSuffix || idSuffix.length !== 6) { customAlert('請輸入身分證字號後六碼！'); return; }
+  if (captchaInput !== generatedCaptchaCode) { 
+    customAlert('圖形驗證碼錯誤，請重新輸入！'); 
+    generateCaptcha(); 
+    document.getElementById('captchaInput').value = ''; 
+    return; 
+  }
+  
+  try {
+    // 前往 Firebase 查詢 exam/user 節點
+    const userRef = database.ref('exam/user');
+    const snapshot = await userRef.once('value');
+    let foundUser = null;
+
+    // 遍歷 user 資料表進行比對 (假設資料表內有「身分證」或 key 就是身分證後六碼)
+    snapshot.forEach(child => {
+      const userData = child.val();
+      // 請依據您 user 表的真實欄位名稱調整 (例如: userData.身分證, userData.ID 或 child.key)
+      if (child.key === idSuffix || 
+         (userData && userData.身分證 && String(userData.身分證).endsWith(idSuffix)) ||
+         (userData && userData.id && String(userData.id).endsWith(idSuffix))) {
+        foundUser = userData;
+      }
+    });
+
+    if (!foundUser) {
+      customAlert('查無此身分證後六碼對應的老師資料，請重新確認！');
+      return;
+    }
+
+    // 取得資料表中的姓名，若無則顯示預設字眼
+    loggedInUserName = foundUser.姓名 || '未知老師';
+
+    // 將姓名印到 HTML 上
+    document.getElementById('welcomeUserName').innerText = loggedInUserName;
     
+    // 切換至上傳畫面
     document.getElementById('teacherName').innerText = currentSelectedGradeName;
     document.getElementById('pageAuthStep').classList.add('hidden');
     document.getElementById('pageUploadStep').classList.remove('hidden');
+
+  } catch (err) {
+    console.error("Firebase 驗證連線失敗：", err);
+    customAlert("連線驗證伺服器失敗，請稍後再試！");
   }
+}
 
   // 核心改寫：真實上傳至 Supabase Storage 並更新 Firebase 網址
   async function processPageUpload() {
