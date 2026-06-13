@@ -390,11 +390,26 @@
   };
 
   // 視窗控制
-  function customAlert(message) {
-    document.getElementById('customAlertMessage').innerText = message;
-    document.getElementById('customAlertModal').classList.remove('hidden');
+  // 新增一個全域變數，用來暫存需要跳轉的網址
+let alertRedirectUrl = ''; 
+
+function customAlert(message, redirectUrl = '') {
+  document.getElementById('customAlertMessage').innerText = message;
+  document.getElementById('customAlertModal').classList.remove('hidden');
+  
+  // 將傳入的網址存入全域變數中（若沒傳傳入則為空字串）
+  alertRedirectUrl = redirectUrl; 
+}
+
+function closeCustomAlert() { 
+  document.getElementById('customAlertModal').classList.add('hidden'); 
+  
+  // 💡 按下確定關閉視窗後，如果發現有暫存網址，就開啟新分頁
+  if (alertRedirectUrl) {
+    window.open(alertRedirectUrl, '_blank');
+    alertRedirectUrl = ''; // 開啟後隨手清空，避免影響其他普通的錯誤彈窗
   }
-  function closeCustomAlert() { document.getElementById('customAlertModal').classList.add('hidden'); }
+}
   function openUploadModal() { document.getElementById('uploadModal').classList.remove('hidden'); resetUploadForm(); }
   function closeUploadModal() { document.getElementById('uploadModal').classList.add('hidden'); }
   // 強制下載音檔的輔助函式
