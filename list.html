@@ -760,13 +760,11 @@ async function processPageVerify() {
     const snapshot = await userRef.once('value');
     let foundUser = null;
 
-    // 遍歷 user 資料表進行比對 (假設資料表內有「身分證」或 key 就是身分證後六碼)
+    // 遍歷 user 資料表進行比對
     snapshot.forEach(child => {
       const userData = child.val();
-      // 請依據您 user 表的真實欄位名稱調整 (例如: userData.身分證, userData.ID 或 child.key)
-      if (child.key === idSuffix || 
-         (userData && userData.身分證 && String(userData.身分證).endsWith(idSuffix)) ||
-         (userData && userData.id && String(userData.id).endsWith(idSuffix))) {
+      // 這裡修正為您真實的資料庫欄位名稱：「身分證字號」
+      if (userData && userData.身分證字號 && String(userData.身分證字號) === idSuffix) {
         foundUser = userData;
       }
     });
@@ -779,8 +777,11 @@ async function processPageVerify() {
     // 取得資料表中的姓名，若無則顯示預設字眼
     loggedInUserName = foundUser.姓名 || '未知老師';
 
-    // 將姓名印到 HTML 上
-    document.getElementById('welcomeUserName').innerText = loggedInUserName;
+    // 將姓名印到 HTML 上 (請確保 HTML 有加上 id="welcomeUserName" 的 span)
+    const welcomeSpan = document.getElementById('welcomeUserName');
+    if (welcomeSpan) {
+      welcomeSpan.innerText = loggedInUserName;
+    }
     
     // 切換至上傳畫面
     document.getElementById('teacherName').innerText = currentSelectedGradeName;
