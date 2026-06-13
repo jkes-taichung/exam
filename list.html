@@ -330,8 +330,8 @@
 
       <div id="pageUploadStep" class="hidden">
         <div style="background: #ecfdf5; border: 1px solid #10b981; color: #047857; padding: 12px; border-radius: 6px; margin-bottom: 20px; font-weight: bold; text-align: center;">
-          ✓ 驗證成功！歡迎  英文老師
-        </div>
+  ✓ 驗證成功！歡迎 英文老師 <span id="welcomeUserName" style="color: #065f46; font-size: 18px;"></span>
+</div>
         
         <div id="uploadFormControls">
           <div class="form-group">
@@ -381,6 +381,7 @@
   let currentSelectedGradeCode = '';
   let currentSelectedGradeName = '';
   let generatedCaptchaCode = '';
+  let loggedInUserName = ''; // 新增這行：用來記錄當前通過驗證的老師姓名
 
   window.onload = function() {
     const today = new Date();
