@@ -849,6 +849,7 @@ async function processPageVerify() {
   }
 
   // 💡 主要的上傳函式
+// 主要的上傳函式（已整合上傳成功自動跳轉對應年級網頁功能）
   async function processPageUpload() {
     const fileInput = document.getElementById('audioFileInput');
     const file = fileInput.files[0];
@@ -928,7 +929,13 @@ async function processPageVerify() {
 
       // 5. 上傳成功後的介面收尾
       document.getElementById('uploadSpinner').classList.add('hidden');
-      customAlert(`🎉 ${currentSelectedGradeName} 英聽音檔上傳成功！\n請打開${currentSelectedGradeName}網頁聆聽一次是否正確?`);
+      
+      // 💡 【新增邏輯】根據當前選擇的年級代碼（如 601, 501），動態組合對應的測驗跳轉網址
+      const targetExamUrl = `https://jkes-taichung.github.io/exam/index.html?grade=${currentSelectedGradeCode}`;
+      
+      // 💡 呼叫自訂彈窗，並將對應年級的網址作為第二個參數傳入
+      customAlert(`🎉 ${currentSelectedGradeName} 英聽音檔上傳成功！\n\n按下「確定」後，系統將自動開啟測驗網頁，請老師聆聽一次內容是否正確？`, targetExamUrl);
+      
       closeUploadModal();
 
     } catch (err) {
