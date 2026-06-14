@@ -398,61 +398,63 @@
 
   // 視窗控制
   // 新增一個全域變數，用來暫存需要跳轉的網址
-let alertRedirectUrl = ''; 
+  let alertRedirectUrl = ''; 
 
-function customAlert(message, redirectUrl = '') {
-  document.getElementById('customAlertMessage').innerText = message;
-  document.getElementById('customAlertModal').classList.remove('hidden');
-  
-  // 將傳入的網址存入全域變數中（若沒傳傳入則為空字串）
-  alertRedirectUrl = redirectUrl; 
-}
-
-function closeCustomAlert() { 
-  document.getElementById('customAlertModal').classList.add('hidden'); 
-  
-  // 💡 按下確定關閉視窗後，如果發現有暫存網址，就開啟新分頁
-  if (alertRedirectUrl) {
-    window.open(alertRedirectUrl, '_blank');
-    alertRedirectUrl = ''; // 開啟後隨手清空，避免影響其他普通的錯誤彈窗
+  function customAlert(message, redirectUrl = '') {
+    document.getElementById('customAlertMessage').innerText = message;
+    document.getElementById('customAlertModal').classList.remove('hidden');
+    
+    // 將傳入的網址存入全域變數中（若沒傳傳入則為空字串）
+    alertRedirectUrl = redirectUrl; 
   }
-}
+
+  function closeCustomAlert() { 
+    document.getElementById('customAlertModal').classList.add('hidden'); 
+    
+    // 💡 按下確定關閉視窗後，如果發現有暫存網址，就開啟新分頁
+    if (alertRedirectUrl) {
+      window.open(alertRedirectUrl, '_blank');
+      alertRedirectUrl = ''; // 開啟後隨手清空，避免影響其他普通的錯誤彈窗
+    }
+  }
+
   function openUploadModal() { document.getElementById('uploadModal').classList.remove('hidden'); resetUploadForm(); }
   function closeUploadModal() { document.getElementById('uploadModal').classList.add('hidden'); }
+  
   // 強制下載音檔的輔助函式
-async function downloadAudioFile(url, fileName) {
-  try {
-    // 提醒：使用 fetch 可以將檔案轉換為 Blob，強制瀏覽器「下載」而不是直接在分頁中「播放」
-    const response = await fetch(url);
-    if (!response.ok) throw new Error('網路回應錯誤');
-    const blob = await response.blob();
-    
-    // 嘗試從網址抓取副檔名，如果抓不到就預設為 mp3
-    let ext = url.split('.').pop().split('?')[0];
-    if (!['mp3', 'wav', 'm4a', 'wma', 'ogg'].includes(ext.toLowerCase())) {
-      ext = 'mp3';
-    }
+  async function downloadAudioFile(url, fileName) {
+    try {
+      // 提醒：使用 fetch 可以將檔案轉換為 Blob，強制瀏覽器「下載」而不是直接在分頁中「播放」
+      const response = await fetch(url);
+      if (!response.ok) throw new Error('網路回應錯誤');
+      const blob = await response.blob();
+      
+      // 嘗試從網址抓取副檔名，如果抓不到就預設為 mp3
+      let ext = url.split('.').pop().split('?')[0];
+      if (!['mp3', 'wav', 'm4a', 'wma', 'ogg'].includes(ext.toLowerCase())) {
+        ext = 'mp3';
+      }
 
-    // 建立暫時的 Blob URL 與隱藏的 <a> 標籤來觸發下載
-    const blobUrl = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.style.display = 'none';
-    a.href = blobUrl;
-    a.download = `${fileName}.${ext}`; // 設定下載的預設檔名
-    
-    document.body.appendChild(a);
-    a.click();
-    
-    // 下載完成後清理記憶體
-    window.URL.revokeObjectURL(blobUrl);
-    document.body.removeChild(a);
-    
-  } catch (error) {
-    console.error('Blob 下載失敗，改用新分頁開啟:', error);
-    // 💡 備用方案：如果 Supabase 的 CORS (跨域) 設定阻擋了 fetch，就直接開新分頁讓老師按右鍵下載
-    window.open(url, '_blank');
+      // 建立暫時的 Blob URL 與隱藏的 <a> 標籤來觸發下載
+      const blobUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = blobUrl;
+      a.download = `${fileName}.${ext}`; // 設定下載的預設檔名
+      
+      document.body.appendChild(a);
+      a.click();
+      
+      // 下載完成後清理記憶體
+      window.URL.revokeObjectURL(blobUrl);
+      document.body.removeChild(a);
+      
+    } catch (error) {
+      console.error('Blob 下載失敗，改用新分頁開啟:', error);
+      // 💡 備用方案：如果 Supabase 的 CORS (跨域) 設定阻擋了 fetch，就直接開新分頁讓老師按右鍵下載
+      window.open(url, '_blank');
+    }
   }
-}
 
   // 雲端轉換連結修正（保留給相容格式）
   function convertToDirectDownloadUrl(url) {
@@ -486,12 +488,20 @@ async function downloadAudioFile(url, fileName) {
       // ✅ 步驟 A：先從 userDb 拉取 class 節點資料
       const classSnap = await userDb.ref('class').once('value');
       let classesObj = classSnap.val() || [];
-      // 如果資料庫結構是 Object，將其轉換為 Array
-      if (!Array.isArray(classesObj)) {
-        globalClassList = Object.keys(classesObj).map(key => classesObj[key]);
-      } else {
-        globalClassList = classesObj;
-      }
+      globalClassList = [];
+      
+      // 💡 修正 1：更強健的班級陣列解析 (應對 Google Sheets 轉出可能是物件陣列的情況)
+      let rawValues = Array.isArray(classesObj) ? classesObj : Object.values(classesObj);
+      rawValues.forEach(item => {
+        if (!item) return;
+        if (typeof item === 'string') {
+          globalClassList.push(item);
+        } else if (typeof item === 'object') {
+          // 如果資料庫匯出的是 { "班級": "一年一班" } 的物件形式
+          let val = item['班級'] || item['class'] || Object.values(item)[0];
+          if (typeof val === 'string') globalClassList.push(val);
+        }
+      });
 
       // ✅ 步驟 B：監聽原本 examDb 的資料
       database.ref('exam').off('value'); 
@@ -528,6 +538,7 @@ async function downloadAudioFile(url, fileName) {
       }
     }
   }
+
   // 缺考回報統計表格渲染
   function buildAbsenceTablesWithPreload(classesNode, absenceNode) {
     const bodies = {
@@ -687,16 +698,16 @@ async function downloadAudioFile(url, fileName) {
       let downloadLinkHtml = `<span class="status-empty">-</span>`;
       
     if (g.hasMusic) {
-  const gradeData = timeMap[g.gradeCode];
-  const rawAudioUrl = gradeData ? (gradeData["3music"] || "") : "";
-  
-  if (rawAudioUrl) {
-    // 💡 點擊時改為呼叫 downloadAudioFile 函式，並帶入該年級名稱作為下載檔名
-    downloadLinkHtml = `<a href="javascript:void(0)" onclick="downloadAudioFile('${rawAudioUrl}', '${g.name}_英聽測驗音檔')" class="action-link">下載音檔</a>`;
-  } else {
-    downloadLinkHtml = `<span class="status-empty" style="color:#ef4444; font-weight:600;">未上傳</span>`;
-  }
-}
+      const gradeData = timeMap[g.gradeCode];
+      const rawAudioUrl = gradeData ? (gradeData["3music"] || "") : "";
+      
+      if (rawAudioUrl) {
+        // 💡 點擊時改為呼叫 downloadAudioFile 函式，並帶入該年級名稱作為下載檔名
+        downloadLinkHtml = `<a href="javascript:void(0)" onclick="downloadAudioFile('${rawAudioUrl}', '${g.name}_英聽測驗音檔')" class="action-link">下載音檔</a>`;
+      } else {
+        downloadLinkHtml = `<span class="status-empty" style="color:#ef4444; font-weight:600;">未上傳</span>`;
+      }
+    }
 
       const separator = classUrls.includes('?') ? '&' : '?';
       const gradePrefix = g.gradeCode.charAt(0);
@@ -777,71 +788,73 @@ async function downloadAudioFile(url, fileName) {
     }
   }
 
-async function processPageVerify() {
-  const idSuffix = document.getElementById('idSuffixInput').value.trim();
-  const captchaInput = document.getElementById('captchaInput').value.trim();
-  
-  if (!idSuffix || idSuffix.length !== 6) { customAlert('請輸入身分證字號後六碼！'); return; }
-  if (captchaInput !== generatedCaptchaCode) { 
-    customAlert('圖形驗證碼錯誤，請重新輸入！'); 
-    generateCaptcha(); 
-    document.getElementById('captchaInput').value = ''; 
-    return; 
-  }
-  
-  try {
-    // ✅ 改前往 userDb 查詢 user 節點
-    const userRef = userDb.ref('user');
-    const snapshot = await userRef.once('value');
+  async function processPageVerify() {
+    const idSuffix = document.getElementById('idSuffixInput').value.trim();
+    const captchaInput = document.getElementById('captchaInput').value.trim();
     
-    let foundUser = null;
-    let isIdMatched = false;
-    let isSubjectMatched = false;
-
-    // 遍歷 user 資料表進行比對
-    snapshot.forEach(child => {
-      const userData = child.val();
+    if (!idSuffix || idSuffix.length !== 6) { customAlert('請輸入身分證字號後六碼！'); return; }
+    if (captchaInput !== generatedCaptchaCode) { 
+      customAlert('圖形驗證碼錯誤，請重新輸入！'); 
+      generateCaptcha(); 
+      document.getElementById('captchaInput').value = ''; 
+      return; 
+    }
+    
+    try {
+      // ✅ 前往 userDb 查詢 user 節點
+      const userRef = userDb.ref('user');
+      const snapshot = await userRef.once('value');
       
-      // 先核對身分證是否正確
-      if (userData && userData.身分證 && String(userData.身分證) === idSuffix) {
-        isIdMatched = true;
-        // 再進一步核對科目是否為英文
-        if (userData.科目 === '英文') {
-          isSubjectMatched = true;
-          foundUser = userData;
+      let foundUser = null;
+      let isIdMatched = false;
+      let isSubjectMatched = false;
+
+      // 遍歷 user 資料表進行比對
+      snapshot.forEach(child => {
+        const userData = child.val();
+        
+        // 先核對身分證是否正確
+        if (userData && userData.身分證 && String(userData.身分證).trim() === idSuffix) {
+          isIdMatched = true;
+          // 💡 修正 2：根據資料庫截圖，部分老師的科目為「英語」而非「英文」，需要一併考量
+          let subject = userData.科目 ? String(userData.科目).trim() : '';
+          if (subject === '英文' || subject === '英語') {
+            isSubjectMatched = true;
+            foundUser = userData;
+          }
         }
+      });
+
+      // 錯誤處理分流，讓老師知道哪裡出問題
+      if (!isIdMatched) {
+        customAlert('查無此身分證後六碼對應的老師資料，請重新確認！');
+        return;
       }
-    });
+      if (!isSubjectMatched) {
+        customAlert('身分驗證失敗：您的科目並非「英文」或「英語」，沒有權限上傳英聽檔案！');
+        return;
+      }
 
-    // 錯誤處理分流，讓老師知道哪裡出問題
-    if (!isIdMatched) {
-      customAlert('查無此身分證後六碼對應的老師資料，請重新確認！');
-      return;
+      // 取得資料表中的姓名，若無則顯示預設字眼
+      loggedInUserName = foundUser.姓名 || '未知老師';
+
+      // 將姓名印到 HTML 上
+      const welcomeSpan = document.getElementById('welcomeUserName');
+      if (welcomeSpan) {
+        welcomeSpan.innerText = loggedInUserName;
+      }
+      
+      // 切換至上傳畫面
+      document.getElementById('teacherName').innerText = currentSelectedGradeName;
+      document.getElementById('pageAuthStep').classList.add('hidden');
+      document.getElementById('pageUploadStep').classList.remove('hidden');
+
+    } catch (err) {
+      console.error("Firebase 驗證連線失敗：", err);
+      customAlert("連線驗證伺服器失敗，請稍後再試！");
     }
-    if (!isSubjectMatched) {
-      customAlert('身分驗證失敗：您的科目並非「英文」，沒有權限上傳英聽檔案！');
-      return;
-    }
-
-    // 取得資料表中的姓名，若無則顯示預設字眼
-    loggedInUserName = foundUser.姓名 || '未知老師';
-
-    // 將姓名印到 HTML 上
-    const welcomeSpan = document.getElementById('welcomeUserName');
-    if (welcomeSpan) {
-      welcomeSpan.innerText = loggedInUserName;
-    }
-    
-    // 切換至上傳畫面
-    document.getElementById('teacherName').innerText = currentSelectedGradeName;
-    document.getElementById('pageAuthStep').classList.add('hidden');
-    document.getElementById('pageUploadStep').classList.remove('hidden');
-
-  } catch (err) {
-    console.error("Firebase 驗證連線失敗：", err);
-    customAlert("連線驗證伺服器失敗，請稍後再試！");
   }
-}
+
   // 💡 新增的輔助函式：用來檢查 WAV 檔案內部的二進制編碼
   function checkWavIsStandardPCM(file) {
     return new Promise((resolve) => {
@@ -881,8 +894,7 @@ async function processPageVerify() {
     });
   }
 
-  // 💡 主要的上傳函式
-// 主要的上傳函式（已整合上傳成功自動跳轉對應年級網頁功能）
+  // 主要的上傳函式（已整合上傳成功自動跳轉對應年級網頁功能）
   async function processPageUpload() {
     const fileInput = document.getElementById('audioFileInput');
     const file = fileInput.files[0];
