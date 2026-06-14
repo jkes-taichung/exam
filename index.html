@@ -388,7 +388,7 @@
         let classData = await clsRes.json();
         
         // ⚠️ 修改點：因為你的班級名稱變成了 JSON 的 Key，所以改用 Object.keys()
-        let classes = classData ? Object.keys(classData) : [];
+        let classes = classData ? Object.values(classData) : [];
 
         // 2. 抓取時間/課表設定 (維持原本邏輯，從 FIREBASE_DB_URL 抓取)
         let timeRes = await fetch(`${FIREBASE_DB_URL}/exam/時間.json`);
