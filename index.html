@@ -979,6 +979,624 @@ var currentGrade = urlParams.get('grade');
         }
       }
       
-    </script>
+    </script><script>
+      // 🎯 1. 已修正：更新為您圖片中的全新 Firebase DB URL
+      const FIREBASE_DB_URL = "https://user-a354e-default-rtdb.asia-southeast1.firebasedatabase.app";
+      
+      var urlParams = new URLSearchParams(window.location.search);
+      var currentGrade = urlParams.get('grade');
+      var scheduleData = [];
+      var currentSubjectName = "";
+      var timeOffset = 0; 
+
+      var playedStartAnnouncement = -1;
+      var playedEndAnnouncement = -1;
+      var playedSubjectAnnouncement = -1; 
+
+      var globalExamState = {
+        isExam: false,
+        startTime: null,
+        endTime: null
+      };
+      var bearAnimationId = null;
+
+      // 當頁面載入時，透過 Fetch 請求 Firebase 資料
+      window.onload = async function() {
+        try {
+          var data = await fetchInitialData(currentGrade);
+          initPage(data);
+        } catch (error) {
+          console.error("載入初始資料失敗：", error);
+          document.getElementById('clock').innerText = "系統異常";
+          document.getElementById('schedule-container').innerHTML = `<div style="padding:22px; color:red; font-size:20px;">資料載入失敗！<br><br>錯誤原因：${error.message}<br><br>請檢查 Firebase 資料庫是否有空白或格式錯誤。</div>`;
+        }
+      };
+
+      // 從 Firebase 獲取班級與課表資料
+      async function fetchInitialData(gradeStr) {
+        // 🎯 2. 已修正：改為讀取 /class.json 節點
+        let clsRes = await fetch(`${FIREBASE_DB_URL}/class.json`);
+        let classData = await clsRes.json();
+        
+        // 🎯 3. 已修正：因為 Firebase 中班級是 Key，所以改用 Object.keys() 抓取「一年一班」等字串
+        let classes = classData ? Object.keys(classData) : [];
+
+        // 4. 抓取時間/課表設定（此處維持讀取 /exam/時間.json，若此節點也有更動請再告訴我）
+        let timeRes = await fetch(`${FIREBASE_DB_URL}/exam/時間.json`);
+        let timeData = await timeRes.json();
+
+        let scheduleObj = null;
+        if (timeData) {
+          for (let key in timeData) {
+            if (timeData[key] && String(timeData[key].grade) === String(gradeStr)) {
+              scheduleObj = timeData[key];
+              break;
+            }
+          }
+        }
+
+        let scheduleList = [];
+        if (scheduleObj) {
+          for (let i = 1; i <= 8; i++) {
+            let startStr = scheduleObj[`${i}start`];
+            let endStr = scheduleObj[`${i}end`];
+            let subjStr = scheduleObj[`${i}subject`];
+            let musicData = scheduleObj[`${i}music`];
+
+            if (startStr && subjStr) {
+              scheduleList.push({
+                period: i,
+                start: String(startStr), 
+                end: String(endStr),
+                subject: subjStr,
+                hasMusic: !!musicData,
+                music: musicData || ""
+              });
+            }
+          }
+        }
+        return { classes: classes, schedule: scheduleList };
+      }
+
+      function initPage(data) {
+        var select = document.getElementById('class-select');
+        
+        const gradeMap = {
+          '1': '一', '2': '二', '3': '三', '4': '四',
+          '5': '五', '6': '六', '7': '七', '8': '八', '9': '九'
+        };
+
+        var firstDigit = String(currentGrade).charAt(0);
+        var targetChinesePrefix = gradeMap[firstDigit]; 
+
+        data.classes.forEach(function(cls) {
+          if (cls) { 
+            // 檢查班級的第一個字是否符合對應的中文年級 (例如 URL 帶 ?grade=101 -> 抓取 "一" 開頭的班級)
+            if (!targetChinesePrefix || cls.startsWith(targetChinesePrefix)) {
+              var opt = document.createElement('option');
+              opt.value = cls;
+              opt.innerHTML = cls;
+              select.appendChild(opt);
+            }
+          }
+        });
+
+        scheduleData = data.schedule;
+        renderSchedule();
+        triggerBackgroundAudioLoad();
+
+        syncServerTime(true);
+        setInterval(function() { syncServerTime(false); }, 19 * 60 * 1000);
+      }
+
+      // 讀取自己網頁的伺服器時間標頭
+      async function syncServerTime(isInitialLoad) {
+        try {
+          let response = await fetch(window.location.href, { 
+            method: 'HEAD', 
+            cache: 'no-store' 
+          });
+          
+          let dateHeader = response.headers.get('Date');
+          if (dateHeader) {
+            let serverTimestamp = new Date(dateHeader).getTime();
+            let localTimestamp = new Date().getTime();
+            timeOffset = serverTimestamp - localTimestamp; 
+          } else {
+            throw new Error("伺服器未回傳 Date 標頭");
+          }
+        } catch (err) {
+          console.warn("無法取得伺服器時間，降級使用本地時間：", err);
+          timeOffset = 0;
+        }
+
+        if (isInitialLoad) {
+          updateClock(); 
+          setInterval(updateClock, 1000); 
+          window.addEventListener('resize', updateClock);
+          startBearAnimationLoop();
+        }
+      }
+
+      function renderSchedule() {
+        var container = document.getElementById('schedule-container');
+        container.innerHTML = '';
+        
+        if (scheduleData.length === 0) {
+            container.innerHTML = '<div style="padding:15px; color:#666;">無此年級的課表資料。</div>';
+            return;
+        }
+
+        scheduleData.forEach(function(item, index) {
+          var div = document.createElement('div');
+          div.className = 'schedule-item';
+          div.id = 'schedule-item-' + index;
+          
+          var hasSubject = item.subject && typeof item.subject === 'string' && item.subject.trim() !== "" && item.subject.indexOf("無") === -1 && item.subject.indexOf("休") === -1;
+          
+          var audioZoneContent = ''; 
+          if (hasSubject && item.subject.indexOf('英文') !== -1) {
+            if (item.hasMusic) {
+              audioZoneContent = `<span class="loading-text">⏳音檔準備中...</span>`;
+            } else {
+              audioZoneContent = `<span style="font-size:26px; color:red;">尚未上傳音檔</span>`; 
+            }
+          }
+
+          if (hasSubject) {
+            div.innerHTML = `
+              <div class="schedule-text-container">
+                <span class="sub-name">${item.subject}</span>
+                <span class="sub-time">${item.start}~${item.end}</span>
+              </div>
+              <span class="sub-audio-zone" id="audio-zone-${item.period}">${audioZoneContent}</span>
+            `;
+          } else {
+            div.innerHTML = `
+              <div class="schedule-text-container">
+                <span class="sub-name">${item.subject || ''}</span>
+                <span class="sub-time"></span>
+              </div>
+              <span class="sub-audio-zone" id="audio-zone-${item.period}"></span>
+            `;
+          }
+          container.appendChild(div);
+        });
+      }
+
+      function triggerBackgroundAudioLoad() {
+        scheduleData.forEach(function(item) {
+          if (item.subject && typeof item.subject === 'string' && item.subject.indexOf('英文') !== -1 && item.hasMusic) {
+            var audioUrl = item.music || "";
+            var zone = document.getElementById('audio-zone-' + item.period);
+            if (!zone) return;
+
+            if (audioUrl === "") {
+              zone.innerHTML = `<span style="color:red;font-size:26px;">無音檔網址資料</span>`;
+              return; 
+            }
+
+            zone.innerHTML = `
+              <audio controls controlsList="nodownload" preload="metadata" crossorigin="anonymous">
+                <source src="${audioUrl}" type="audio/mpeg">
+                您的瀏覽器不支援音訊播放。
+              </audio>
+            `;
+          }
+        });
+      }
+
+      function getCorrectedNow() {
+        var correctedTimestamp = new Date().getTime() + timeOffset;
+        return new Date(correctedTimestamp);
+      }
+
+      function parseTime(timeStr) {
+        if (!timeStr || typeof timeStr.split !== 'function') return new Date();
+        var parts = timeStr.split(':');
+        var now = getCorrectedNow(); 
+        now.setHours(parseInt(parts[0], 10) || 0, parseInt(parts[1], 10) || 0, 0, 0);
+        return now;
+      }
+
+      function speakText(text) {
+        if ('speechSynthesis' in window) {
+          window.speechSynthesis.cancel(); 
+          var utterance = new SpeechSynthesisUtterance(text);
+          utterance.lang = 'zh-TW';
+          utterance.rate = 0.92;    
+          window.speechSynthesis.speak(utterance);
+        }
+      }
+
+      function updateSvgProgress(percentage, color) {
+        var box = document.getElementById('countdown-box');
+        var svg = document.getElementById('countdown-svg');
+        var bgRect = document.getElementById('bg-rect');
+        var progressRect = document.getElementById('progress-rect');
+        
+        if (!box || !svg || !bgRect || !progressRect) return;
+
+        var w = box.offsetWidth;
+        var h = box.offsetHeight;
+        
+        svg.setAttribute('width', w);
+        svg.setAttribute('height', h);
+        
+        var strokeWidth = 22.5; 
+        var inset = strokeWidth / 2; 
+        var rectW = w - strokeWidth;
+        var rectH = h - strokeWidth;
+        var outerRadius = 45; 
+        var rectRadius = outerRadius - inset; 
+        if (rectRadius < 0) rectRadius = 0;
+
+        bgRect.setAttribute('x', inset);
+        bgRect.setAttribute('y', inset);
+        bgRect.setAttribute('width', rectW);
+        bgRect.setAttribute('height', rectH);
+        bgRect.setAttribute('rx', rectRadius);
+        bgRect.setAttribute('ry', rectRadius);
+        
+        progressRect.setAttribute('x', inset);
+        progressRect.setAttribute('y', inset);
+        progressRect.setAttribute('width', rectW);
+        progressRect.setAttribute('height', rectH);
+        progressRect.setAttribute('rx', rectRadius);
+        progressRect.setAttribute('ry', rectRadius);
+        
+        var perimeter = 2 * (rectW + rectH) - (8 * rectRadius) + (2 * Math.PI * rectRadius);
+        progressRect.style.strokeDasharray = perimeter;
+        
+        var offset = perimeter - (percentage * perimeter);
+        progressRect.style.strokeDashoffset = offset;
+        progressRect.style.stroke = color;
+      }
+
+      function updateClock() {
+        var now = getCorrectedNow(); 
+        now.setMilliseconds(0);
+        var timeString = now.toLocaleTimeString('en-US', { hour12: false, timeZone: 'Asia/Taipei' });
+        
+        var clockEl = document.getElementById('clock');
+        if (clockEl) clockEl.innerText = timeString;
+
+        var activeIndex = -1;
+        var highlightIndex = -1; 
+        var isExamTime = false;
+        var currentStartTime = null;
+        var currentEndTime = null;
+        currentSubjectName = "";
+
+        var items = document.getElementsByClassName('schedule-item');
+        for (var i = 0; i < items.length; i++) {
+          items[i].classList.remove('active');
+        }
+
+        var percentage = 0;
+        var diffMs = 0;
+
+        for (var i = 0; i < scheduleData.length; i++) {
+          if (!scheduleData[i].start || !scheduleData[i].end) continue;
+
+          var startTime = parseTime(scheduleData[i].start);
+          var endTime = parseTime(scheduleData[i].end);
+          var preStartTime = new Date(startTime.getTime() - 5 * 60 * 1000); 
+
+          if (now >= preStartTime && now <= endTime) {
+            highlightIndex = i;
+          }
+
+          if (now >= startTime && now <= endTime) {
+            activeIndex = i;
+            isExamTime = true;
+            currentStartTime = startTime;
+            currentEndTime = endTime;
+            currentSubjectName = scheduleData[i].subject;
+            
+            diffMs = endTime - now;
+            var diffMins = Math.floor(diffMs / 60000);
+            var diffSecs = Math.floor((diffMs % 60000) / 1000);
+            
+            var totalSeconds = Math.floor((endTime - startTime) / 1000); 
+            var remainSeconds = Math.floor(diffMs / 1000);
+            percentage = remainSeconds / totalSeconds;
+            
+            if (percentage > 1) percentage = 1;
+            if (percentage < 0) percentage = 0;
+
+            var color = "#4caf50";
+            if (percentage > 0.5) {
+              color = "#4caf50"; 
+            } else if (percentage > 0.15) {
+              color = "#ff9800"; 
+            } else {
+              color = "#ff0000"; 
+            }
+            
+            updateSvgProgress(percentage, color);
+            var statusEl = document.getElementById('countdown-status');
+            var timerEl = document.getElementById('countdown-timer');
+            if (statusEl) statusEl.innerText = '剩下：';
+            if (timerEl) timerEl.innerText = `${diffMins}分${diffSecs}秒`;
+            break;
+          }
+        }
+
+        globalExamState.isExam = isExamTime;
+        globalExamState.startTime = currentStartTime;
+        globalExamState.endTime = currentEndTime;
+
+        var targetReminderHtml = "";
+
+        if (highlightIndex !== -1) {
+          var hlEl = document.getElementById('schedule-item-' + highlightIndex);
+          if (hlEl) hlEl.classList.add('active');
+        }
+
+        if (isExamTime) {
+          var subEl = document.getElementById('current-subject-label');
+          if (subEl) subEl.innerText = currentSubjectName;
+
+          var elapsedMs = now - currentStartTime;
+          var elapsedMinutes = Math.floor(elapsedMs / 60000); 
+          var elapsedSeconds = Math.floor(elapsedMs / 1000);   
+          var remainSeconds = Math.floor(diffMs / 1000);       
+          var reminderText = "";
+
+          if (elapsedSeconds >= 25 && elapsedSeconds <= 29 && playedSubjectAnnouncement !== activeIndex) {
+            speakText("這節課，考試科目是，" + currentSubjectName + "，請保持安靜！專心作答。");
+            playedSubjectAnnouncement = activeIndex; 
+          }
+
+          if (elapsedSeconds >= 60 && elapsedSeconds <= 64 && playedStartAnnouncement !== activeIndex) {
+            speakText("拿到考卷後，請先寫上班級、姓名、座號。");
+            playedStartAnnouncement = activeIndex; 
+          }
+
+          if (remainSeconds <= 60 && remainSeconds >= 56 && playedEndAnnouncement !== activeIndex) {
+            speakText("考試即將結束，請檢查班級、姓名、座號是否已填寫。");
+            playedEndAnnouncement = activeIndex;   
+          }
+
+          if (elapsedMinutes < 5) {
+            reminderText = "拿到考卷後，請先寫上班級、姓名、座號。";
+          } else if (elapsedMinutes >= 5 && elapsedMinutes < 10) {
+            reminderText = "如有疑問請舉手示意，等待老師處理。";
+          } else if (elapsedMinutes >= 10 && elapsedMinutes < 25) {
+            reminderText = "題目看清楚、寫完要檢查";
+          } else if (elapsedMinutes >= 25 && elapsedMinutes < 35) {
+            reminderText = "作答完成，請檢查完再檢查或趴下休息，保持安靜！";
+          } else {
+            reminderText = "考試即將結束，請檢查班級、姓名、座號是否已填寫。";
+          }
+          targetReminderHtml = reminderText;
+
+        } else {
+          var statusEl = document.getElementById('countdown-status');
+          var timerEl = document.getElementById('countdown-timer');
+          var subEl = document.getElementById('current-subject-label');
+
+          if(statusEl) statusEl.innerText = '休息：';
+          if(timerEl) timerEl.innerText = '非考試中';
+          if(subEl) subEl.innerText = '非考試時間';
+          
+          targetReminderHtml = '非考試時間，請安靜休息或準備下節考試。';
+          updateSvgProgress(0, "#e0e0e0");
+        }
+
+        var reminderContainer = document.getElementById('reminder-text');
+        if (reminderContainer && reminderContainer.innerHTML !== targetReminderHtml) {
+          reminderContainer.innerHTML = targetReminderHtml;
+        }
+      }
+
+      function startBearAnimationLoop() {
+        if (bearAnimationId) return;
+        function renderFrame() {
+          updateBearGeometry();
+          bearAnimationId = requestAnimationFrame(renderFrame);
+        }
+        bearAnimationId = requestAnimationFrame(renderFrame);
+      }
+
+      function updateBearGeometry() {
+        var bear = document.getElementById('countdown-bear');
+        var box = document.getElementById('countdown-box');
+        if (!bear || !box) return;
+
+        var w = box.offsetWidth;
+        var h = box.offsetHeight;
+        
+        var strokeWidth = 22.5;
+        var inset = strokeWidth / 2; 
+        var rectW = w - strokeWidth;
+        var rectH = h - strokeWidth;
+        var outerRadius = 45;
+        var r = outerRadius - inset; 
+        if (r < 0) r = 0;
+
+        var L_stW = rectW - 2 * r;        
+        var L_stH = rectH - 2 * r;        
+        var L_arc = (Math.PI / 2) * r;    
+        var perimeter = 2 * (L_stW + L_stH) + 4 * L_arc; 
+
+        var ratio = 0;
+        if (globalExamState.isExam && globalExamState.startTime && globalExamState.endTime) {
+          var now = getCorrectedNow();
+          var total = globalExamState.endTime - globalExamState.startTime;
+          var remaining = globalExamState.endTime - now;
+          ratio = remaining / total;
+          if (ratio > 1) ratio = 1;
+          if (ratio < 0) ratio = 0;
+        } else {
+          var timestamp = new Date().getTime();
+          ratio = (timestamp / 12000) % 1; 
+        }
+
+        var dist = ratio * perimeter;
+        var x = 0;
+        var y = 0;
+
+        if (dist <= L_stW) {
+          x = inset + r + dist;
+          y = inset;
+        } else if ((dist -= L_stW) <= L_arc) {
+          var angle = -Math.PI / 2 + (dist / L_arc) * (Math.PI / 2);
+          x = (inset + rectW - r) + r * Math.cos(angle);
+          y = (inset + r) + r * Math.sin(angle);
+        } else if ((dist -= L_arc) <= L_stH) {
+          x = inset + rectW;
+          y = inset + r + dist;
+        } else if ((dist -= L_stH) <= L_arc) {
+          var angle = 0 + (dist / L_arc) * (Math.PI / 2);
+          x = (inset + rectW - r) + r * Math.cos(angle);
+          y = (inset + rectH - r) + r * Math.sin(angle);
+        } else if ((dist -= L_arc) <= L_stW) {
+          x = inset + rectW - r - dist;
+          y = inset + rectH;
+        } else if ((dist -= L_stW) <= L_arc) {
+          var angle = Math.PI / 2 + (dist / L_arc) * (Math.PI / 2);
+          x = (inset + r) + r * Math.cos(angle);
+          y = (inset + rectH - r) + r * Math.sin(angle);
+        } else if ((dist -= L_arc) <= L_stH) {
+          x = inset;
+          y = inset + rectH - r - dist;
+        } else {
+          dist -= L_stH;
+          var angle = Math.PI + (dist / L_arc) * (Math.PI / 2);
+          x = (inset + r) + r * Math.cos(angle);
+          y = (inset + r) + r * Math.sin(angle);
+        }
+
+        bear.style.left = x + 'px';
+        bear.style.top = y + 'px';
+        bear.style.transform = 'translate(-50%, -50%)';
+      }
+
+      function showCustomAlert(msg) {
+        var modalMsg = document.getElementById('custom-modal-msg');
+        var modalAlert = document.getElementById('custom-alert-modal');
+        if (modalMsg && modalAlert) {
+          modalMsg.innerText = msg;
+          modalAlert.style.display = 'flex';
+        } else {
+          alert(msg);
+        }
+      }
+
+      function closeCustomAlert() {
+        var modalAlert = document.getElementById('custom-alert-modal');
+        if (modalAlert) modalAlert.style.display = 'none';
+      }
+
+      // 送出缺考人數回報
+      function submitData() {
+        var clsEl = document.getElementById('class-select');
+        var countEl = document.getElementById('absence-count');
+        if (!clsEl || !countEl) return;
+
+        var cls = clsEl.value;
+        var count = countEl.value;
+
+        if (cls === "") { showCustomAlert("請選擇班級！"); return; }
+        if (currentSubjectName === "") { showCustomAlert("目前非考試時間，無法送出缺考資料！"); return; }
+
+        var btn = document.querySelector('.submit-btn');
+        if (btn) {
+          btn.innerText = "獲取IP中...";
+          btn.disabled = true;
+        }
+
+        fetch('https://api.ipify.org?format=json')
+          .then(function(response) { return response.json(); })
+          .then(function(data) {
+            var userIp = data.ip;
+            sendDataToBackend(cls, currentSubjectName, count, userIp);
+          })
+          .catch(function(error) {
+            sendDataToBackend(cls, currentSubjectName, count, "無法取得IP");
+          });
+      }
+
+      // 將資料送回新資料庫的 /exam/缺考 節點
+      async function sendDataToBackend(cls, subject, count, ip) {
+        var btn = document.querySelector('.submit-btn');
+        if (btn) btn.innerText = "傳送中...";
+        
+        try {
+          let localNow = getCorrectedNow(); 
+          
+          let todayDateStr = localNow.toLocaleString('zh-TW', { 
+            timeZone: 'Asia/Taipei', 
+            hour12: true 
+          }).replace('上午', '上午 ').replace('下午', '下午 ');
+
+          let dateOnlyStr = localNow.toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei' });
+
+          let res = await fetch(`${FIREBASE_DB_URL}/exam/缺考.json`);
+          let absences = await res.json() || {};
+
+          let targetKey = null;
+          let maxIndex = -1;
+
+          for (let key in absences) {
+            if (!isNaN(key)) maxIndex = Math.max(maxIndex, parseInt(key));
+            let record = absences[key];
+            
+            if (record && record.班級 === cls && record.日期 && record.日期.startsWith(dateOnlyStr)) {
+              targetKey = key;
+            }
+          }
+
+          if (targetKey !== null) {
+            let patchData = {};
+            patchData[subject] = parseInt(count);
+            patchData.ip = ip;
+            patchData.日期 = todayDateStr; 
+            
+            await fetch(`${FIREBASE_DB_URL}/exam/缺考/${targetKey}.json`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(patchData)
+            });
+          } else {
+            let newIndex = maxIndex + 1;
+            let newData = {
+              ip: ip,
+              日期: todayDateStr, 
+              班級: cls,
+              國語: subject === '國語' ? parseInt(count) : "",
+              數學: subject === '數學' ? parseInt(count) : "",
+              生活: subject === '生活' ? parseInt(count) : "",
+              社會: subject === '社會' ? parseInt(count) : "",
+              自然: subject === '自然' ? parseInt(count) : "",
+              英文: subject === '英文' ? parseInt(count) : ""
+            };
+            
+            await fetch(`${FIREBASE_DB_URL}/exam/缺考/${newIndex}.json`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(newData)
+            });
+          }
+
+          showCustomAlert("資料送出成功！");
+          if (btn) {
+            btn.innerText = "送出";
+            btn.disabled = false;
+          }
+          var countEl = document.getElementById('absence-count');
+          if (countEl) countEl.value = "0";
+
+        } catch (err) {
+          showCustomAlert("發生錯誤：" + err.message);
+          if (btn) {
+            btn.innerText = "送出";
+            btn.disabled = false;
+          }
+        }
+      }
+</script>
   </body>
 </html>
