@@ -364,6 +364,12 @@ var currentGrade = urlParams.get('grade');
       var bearAnimationId = null;
 
       // 當頁面載入時，改為透過 Fetch 請求 Firebase 資料
+     // 🆕 請確保在程式碼最上方的全域變數區有這兩行網址
+      const FIREBASE_DB_URL = "https://exam-e38aa-default-rtdb.asia-southeast1.firebasedatabase.app";
+      const USER_DB_URL = "https://user-a354e-default-rtdb.asia-southeast1.firebasedatabase.app";
+      // var urlParams = ... (保留你原本其他的變數)
+
+      // 當頁面載入時，改為透過 Fetch 請求 Firebase 資料
       window.onload = async function() {
         try {
           var data = await fetchInitialData(currentGrade);
@@ -378,12 +384,14 @@ var currentGrade = urlParams.get('grade');
 
       // 從 Firebase 獲取班級與課表資料
       async function fetchInitialData(gradeStr) {
-        // 1. 抓取班級清單
-        let clsRes = await fetch(`${FIREBASE_DB_URL}/exam/班級.json`);
+        // 🎯 1. 抓取班級清單 (修改點：改從 USER_DB_URL 抓取，路徑為 class.json)
+        let clsRes = await fetch(`${USER_DB_URL}/class.json`);
         let classData = await clsRes.json();
-        let classes = classData ? Object.values(classData) : [];
+        
+        // ⚠️ 修改點：因為你的班級名稱變成了 JSON 的 Key，所以改用 Object.keys()
+        let classes = classData ? Object.keys(classData) : [];
 
-        // 2. 抓取時間/課表設定
+        // 2. 抓取時間/課表設定 (維持原本邏輯，從 FIREBASE_DB_URL 抓取)
         let timeRes = await fetch(`${FIREBASE_DB_URL}/exam/時間.json`);
         let timeData = await timeRes.json();
 
@@ -421,7 +429,6 @@ var currentGrade = urlParams.get('grade');
         }
         return { classes: classes, schedule: scheduleList };
       }
-
       function initPage(data) {
         var select = document.getElementById('class-select');
         
