@@ -790,29 +790,43 @@ async function processPageVerify() {
   }
   
   try {
-    // 前往 Firebase 查詢 exam/user 節點
-    const userRef = database.ref('exam/user');
+    // ✅ 改前往 userDb 查詢 user 節點
+    const userRef = userDb.ref('user');
     const snapshot = await userRef.once('value');
+    
     let foundUser = null;
+    let isIdMatched = false;
+    let isSubjectMatched = false;
 
     // 遍歷 user 資料表進行比對
     snapshot.forEach(child => {
       const userData = child.val();
-      // 這裡修正為您真實的資料庫欄位名稱：「身分證字號」
-      if (userData && userData.身分證字號 && String(userData.身分證字號) === idSuffix) {
-        foundUser = userData;
+      
+      // 先核對身分證是否正確
+      if (userData && userData.身分證 && String(userData.身分證) === idSuffix) {
+        isIdMatched = true;
+        // 再進一步核對科目是否為英文
+        if (userData.科目 === '英文') {
+          isSubjectMatched = true;
+          foundUser = userData;
+        }
       }
     });
 
-    if (!foundUser) {
+    // 錯誤處理分流，讓老師知道哪裡出問題
+    if (!isIdMatched) {
       customAlert('查無此身分證後六碼對應的老師資料，請重新確認！');
+      return;
+    }
+    if (!isSubjectMatched) {
+      customAlert('身分驗證失敗：您的科目並非「英文」，沒有權限上傳英聽檔案！');
       return;
     }
 
     // 取得資料表中的姓名，若無則顯示預設字眼
     loggedInUserName = foundUser.姓名 || '未知老師';
 
-    // 將姓名印到 HTML 上 (請確保 HTML 有加上 id="welcomeUserName" 的 span)
+    // 將姓名印到 HTML 上
     const welcomeSpan = document.getElementById('welcomeUserName');
     if (welcomeSpan) {
       welcomeSpan.innerText = loggedInUserName;
@@ -828,7 +842,6 @@ async function processPageVerify() {
     customAlert("連線驗證伺服器失敗，請稍後再試！");
   }
 }
-
   // 💡 新增的輔助函式：用來檢查 WAV 檔案內部的二進制編碼
   function checkWavIsStandardPCM(file) {
     return new Promise((resolve) => {
