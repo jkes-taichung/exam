@@ -467,8 +467,11 @@ async function downloadAudioFile(url, fileName) {
     startRealtimeSync();
   }
 
+  // 全域變數用來儲存從 user 資料庫拉取的班級清單
+  let globalClassList = [];
+
   // Firebase 即時同步偵聽
-  function startRealtimeSync() {
+  async function startRealtimeSync() {
     const btn = document.getElementById('refreshBtn');
     const icon = document.getElementById('refreshIcon');
     const text = document.getElementById('refreshText');
@@ -479,29 +482,43 @@ async function downloadAudioFile(url, fileName) {
       text.innerText = '連線 Firebase 中...';
     }
 
-    database.ref('exam').off('value'); 
-    database.ref('exam').on('value', snapshot => {
-      const examData = snapshot.val() || {};
-      
-      const timeNode = examData.時間 || [];
-      const classesNode = examData.班級 || [];
-      const absenceNode = examData.缺考 || [];
-    const classUrls = "https://jkes-taichung.github.io/exam/index.html";
-
-      renderGradeTablesFromFirebase(timeNode, classUrls);
-      buildAbsenceTablesWithPreload(classesNode, absenceNode);
-
-      if (btn && icon && text) {
-        icon.classList.remove('spinning');
-        btn.classList.add('success');
-        text.innerText = '✓ 即時同步中';
-        setTimeout(() => {
-          btn.disabled = false;
-          btn.classList.remove('success');
-          text.innerText = '重新整理數據';
-        }, 1200);
+    try {
+      // ✅ 步驟 A：先從 userDb 拉取 class 節點資料
+      const classSnap = await userDb.ref('class').once('value');
+      let classesObj = classSnap.val() || [];
+      // 如果資料庫結構是 Object，將其轉換為 Array
+      if (!Array.isArray(classesObj)) {
+        globalClassList = Object.keys(classesObj).map(key => classesObj[key]);
+      } else {
+        globalClassList = classesObj;
       }
-    }, err => {
+
+      // ✅ 步驟 B：監聽原本 examDb 的資料
+      database.ref('exam').off('value'); 
+      database.ref('exam').on('value', snapshot => {
+        const examData = snapshot.val() || {};
+        
+        const timeNode = examData.時間 || [];
+        const absenceNode = examData.缺考 || [];
+        const classUrls = "https://jkes-taichung.github.io/exam/index.html";
+
+        renderGradeTablesFromFirebase(timeNode, classUrls);
+        
+        // 這裡把原本的 classesNode 替換成剛剛抓下來的 globalClassList
+        buildAbsenceTablesWithPreload(globalClassList, absenceNode);
+
+        if (btn && icon && text) {
+          icon.classList.remove('spinning');
+          btn.classList.add('success');
+          text.innerText = '✓ 即時同步中';
+          setTimeout(() => {
+            btn.disabled = false;
+            btn.classList.remove('success');
+            text.innerText = '重新整理數據';
+          }, 1200);
+        }
+      });
+    } catch (err) {
       console.error(err);
       customAlert("Firebase 連線失敗：" + err.message);
       if (btn && icon && text) {
@@ -509,12 +526,8 @@ async function downloadAudioFile(url, fileName) {
         icon.classList.remove('spinning');
         text.innerText = '重新整理數據';
       }
-    });
+    }
   }
-
-
-  
-
   // 缺考回報統計表格渲染
   function buildAbsenceTablesWithPreload(classesNode, absenceNode) {
     const bodies = {
