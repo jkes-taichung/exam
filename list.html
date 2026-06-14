@@ -788,81 +788,83 @@
     }
   }
 
-  async function processPageVerify() {
-  const idSuffix = document.getElementById('idSuffixInput').value.trim();
-  const captchaInput = document.getElementById('captchaInput').value.trim();
-  
-  if (!idSuffix || idSuffix.length !== 6) { customAlert('請輸入身分證字號後六碼！'); return; }
-  if (captchaInput !== generatedCaptchaCode) { 
-    customAlert('圖形驗證碼錯誤，請重新輸入！'); 
-    generateCaptcha(); 
-    document.getElementById('captchaInput').value = ''; 
-    return; 
-  }
-  
-  try {
-    // ✅ 前往 userDb 查詢 user 節點
-    const userRef = userDb.ref('user');
-    const snapshot = await userRef.once('value');
+async function processPageVerify() {
+    const idSuffix = document.getElementById('idSuffixInput').value.trim();
+    const captchaInput = document.getElementById('captchaInput').value.trim();
     
-    let foundUser = null;
-    let isIdMatched = false;
-    let isSubjectMatched = false;
-
-    // 遍歷 user 資料表進行比對
-    snapshot.forEach(child => {
-      const teacherNameKey = child.key; // 💡 這裡直接取得節點的 Key（也就是老師姓名）
-      const userData = child.val();
+    if (!idSuffix || idSuffix.length !== 6) { customAlert('請輸入身分證字號後六碼！'); return; }
+    if (captchaInput !== generatedCaptchaCode) { 
+      customAlert('圖形驗證碼錯誤，請重新輸入！'); 
+      generateCaptcha(); 
+      document.getElementById('captchaInput').value = ''; 
+      return; 
+    }
+    
+    try {
+      // ✅ 前往 userDb 查詢 user 節點
+      const userRef = userDb.ref('user');
+      const snapshot = await userRef.once('value');
       
-      if (userData) {
-        // 先核對身分證是否正確
-        if (userData.身分證 && String(userData.身分證).trim() === idSuffix) {
-          isIdMatched = true;
-          
-          // 檢查科目是否為英文或英語
-          let subject = userData.科目 ? String(userData.科目).trim() : '';
-          if (subject === '英文' || subject === '英語') {
-            isSubjectMatched = true;
+      let foundUser = null;
+      let isIdMatched = false;
+      let isSubjectMatched = false;
+
+      // 遍歷 user 資料表進行比對
+      snapshot.forEach(child => {
+        const userData = child.val();
+        
+        if (userData) {
+          // 💡 修正點：將資料庫內部的「身分證」轉成字串並去除空白進行比對
+          let userIdCard = userData.身分證 ? String(userData.身分證).trim() : '';
+
+          // 先核對身分證是否正確
+          if (userIdCard === idSuffix) {
+            isIdMatched = true;
             
-            // 💡 將 userData 與正確的姓名 Key 組合起來
-            foundUser = {
-              ...userData,
-              姓名: teacherNameKey // 確保後續 loggedInUserName 能順利拿到名字
-            };
+            // 檢查科目是否為英文或英語
+            let subject = userData.科目 ? String(userData.科目).trim() : '';
+            if (subject === '英文' || subject === '英語') {
+              isSubjectMatched = true;
+              
+              // 💡 關鍵修正：因為現在 Key 是流水號，老師的姓名要直接從內部的「姓名」欄位取得
+              foundUser = {
+                ...userData,
+                姓名: userData.姓名 ? String(userData.姓名).trim() : '未知老師'
+              };
+            }
           }
         }
+      });
+
+      // 錯誤處理分流，讓老師 know 哪裡出問題
+      if (!isIdMatched) {
+        customAlert('查無此身分證後六碼對應的老師資料，請重新確認！');
+        return;
       }
-    });
+      if (!isSubjectMatched) {
+        customAlert('身分驗證失敗：您的科目並非「英文」或「英語」，沒有權限上傳英聽檔案！');
+        return;
+      }
 
-    // 錯誤處理分流，讓老師知道哪裡出問題
-    if (!isIdMatched) {
-      customAlert('查無此身分證後六碼對應的老師資料，請重新確認！');
-      return;
+      // 取得資料表中的正確姓名（已從內部的屬性欄位安全提取）
+      loggedInUserName = foundUser.姓名;
+
+      // 將姓名印到 HTML 上
+      const welcomeSpan = document.getElementById('welcomeUserName');
+      if (welcomeSpan) {
+        welcomeSpan.innerText = loggedInUserName;
+      }
+      
+      // 切換至上傳畫面
+      document.getElementById('teacherName').innerText = currentSelectedGradeName;
+      document.getElementById('pageAuthStep').classList.add('hidden');
+      document.getElementById('pageUploadStep').classList.remove('hidden');
+
+    } catch (err) {
+      console.error("Firebase 驗證連線失敗：", err);
+      customAlert("連線驗證伺服器失敗，請稍後再試！");
     }
-    if (!isSubjectMatched) {
-      customAlert('身分驗證失敗：您的科目並非「英文」或「英語」，沒有權限上傳英聽檔案！');
-      return;
-    }
-
-    // 取得資料表中的姓名
-    loggedInUserName = foundUser.姓名 || '未知老師';
-
-    // 將姓名印到 HTML 上
-    const welcomeSpan = document.getElementById('welcomeUserName');
-    if (welcomeSpan) {
-      welcomeSpan.innerText = loggedInUserName;
-    }
-    
-    // 切換至上傳畫面
-    document.getElementById('teacherName').innerText = currentSelectedGradeName;
-    document.getElementById('pageAuthStep').classList.add('hidden');
-    document.getElementById('pageUploadStep').classList.remove('hidden');
-
-  } catch (err) {
-    console.error("Firebase 驗證連線失敗：", err);
-    customAlert("連線驗證伺服器失敗，請稍後再試！");
   }
-}
   // 💡 新增的輔助函式：用來檢查 WAV 檔案內部的二進制編碼
   function checkWavIsStandardPCM(file) {
     return new Promise((resolve) => {
