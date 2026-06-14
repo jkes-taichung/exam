@@ -372,15 +372,6 @@
   }
   const database = firebase.database();
 
-  // 💡 新增：2. 第二個 Firebase 初始化 (專門用來讀取 user 資料庫的班級清單)
-const userAppConfig = {
-  databaseURL: "https://user-a354e-default-rtdb.asia-southeast1.firebasedatabase.app"
-};
-// 使用別名 "userApp" 進行獨立初始化，避免與原本的資料庫衝突
-const userApp = firebase.initializeApp(userAppConfig, "userApp");
-const userDatabase = userApp.database();
-  
-
   // 2. Supabase 初始化整合
   const SUPABASE_URL = "https://ltkvavtvwyrholntnzik.supabase.co";
   const SUPABASE_ANON_KEY = "sb_secret_Vpqx_J0I4q3H1yxSTVeXzA_sBmmedAm";
@@ -396,7 +387,6 @@ const userDatabase = userApp.database();
     const today = new Date();
     document.getElementById('todayDateLabel').innerText = `今日日期：${today.getFullYear()}/${String(today.getMonth()+1).padStart(2,'0')}/${String(today.getDate()).padStart(2,'0')}`;
     startRealtimeSync();
-    loadClassListToDropdown(); // 💡 新增：自動載入新資料庫的班級選單
   };
 
   // 視窗控制
@@ -955,41 +945,6 @@ async function processPageVerify() {
       customAlert('儲存失敗，請檢查網路或權限設定：\n' + err.message);
     }
   }
-  // 💡 新增：從 user 資料庫讀取 class 並寫入網頁的 select 下拉選單
-function loadClassListToDropdown() {
-  // 假設您網頁中的班級下拉選單 HTML 標籤為 <select id="classSelect">...</select>
-  const classSelect = document.getElementById('classSelect'); 
-  if (!classSelect) return;
-
-  // 先清空選單，並保留預設的「請選擇」
-  classSelect.innerHTML = '<option value="">請選擇</option>';
-
-  // 前往 user 資料庫的 class 節點抓取資料
-  userDatabase.ref('class').once('value')
-    .then(snapshot => {
-      const classData = snapshot.val();
-      if (!classData) {
-        console.warn("未在 user 資料庫中找到 class 資料");
-        return;
-      }
-
-      // 取得所有班級名稱（即 Firebase 中的 Key 值，例如：一年一班、一年三班...）
-      const classNames = Object.keys(classData);
-
-      // 動態產生 option 標籤並塞入下拉選單中
-      classNames.forEach(className => {
-        const option = document.createElement('option');
-        option.value = className; // 送出表單時的值
-        option.innerText = className; // 網頁畫面上顯示的文字
-        classSelect.appendChild(option);
-      });
-      
-      console.log("班級清單載入成功，共 " + classNames.length + " 個班級。");
-    })
-    .catch(err => {
-      console.error("讀取 user 資料庫班級清單失敗：", err);
-    });
-}
 </script>
 </body>
 </html>
