@@ -372,6 +372,13 @@
   }
   const database = firebase.database();
 
+  // 1-2. 新增 user 資料庫 (負責：班級 class、使用者 user)
+  const userAppConfig = {
+    databaseURL: "https://user-a354e-default-rtdb.asia-southeast1.firebasedatabase.app"
+  };
+  const userApp = firebase.initializeApp(userAppConfig, "userApp");
+  const userDb = userApp.database(); // 這是我們用來讀取班級與老師身分的新 db
+
   // 2. Supabase 初始化整合
   const SUPABASE_URL = "https://ltkvavtvwyrholntnzik.supabase.co";
   const SUPABASE_ANON_KEY = "sb_secret_Vpqx_J0I4q3H1yxSTVeXzA_sBmmedAm";
