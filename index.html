@@ -347,7 +347,7 @@
       // Firebase Realtime DB URL
       const FIREBASE_DB_URL = "https://exam-e38aa-default-rtdb.asia-southeast1.firebasedatabase.app";
       var urlParams = new URLSearchParams(window.location.search);
-var currentGrade = urlParams.get('grade');
+      var currentGrade = urlParams.get('grade');
       var scheduleData = [];
       var currentSubjectName = "";
       var timeOffset = 0; 
@@ -984,6 +984,16 @@ var currentGrade = urlParams.get('grade');
           }
         }
       }
+
+      // 👇👇👇 監聽使用者的第一次點擊，用來解除瀏覽器的語音封印 👇👇👇
+      document.body.addEventListener('click', function() {
+        if ('speechSynthesis' in window) {
+          // 播放一段無聲的空白語音，騙過瀏覽器取得權限
+          var unlockUtterance = new SpeechSynthesisUtterance('');
+          window.speechSynthesis.speak(unlockUtterance);
+          console.log("🔊 語音自動播放權限已解鎖！");
+        }
+      }, { once: true });
       
     </script>
   </body>
