@@ -1,7 +1,9 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-TW">
   <head>
+    <meta charset="UTF-8">
     <base target="_top">
+    <title>考試倒數計時系統</title>
     <style>
       /* 調整為滿版設計 */
       html, body { 
@@ -34,34 +36,34 @@
       /* 現在時間字體 */
       .time-display { font-size: 132px; font-weight: bold; white-space: nowrap; } 
 
-      /* 🆕 新增：美化時間輸入框，使其融入原本版面 */
+      /* 美化時間輸入框，使其融入原本版面 */
       .time-edit-input {
         font-size: inherit; 
         font-family: inherit;
         color: #333;
         background-color: transparent;
-        border: 1px solid transparent; /* 預設隱藏邊框，看起來像純文字 */
+        border: 1px solid transparent; 
         border-radius: 5px;
-        padding: 0px 2px; /* 減少左右留白 */
+        padding: 0px 2px; 
         cursor: pointer;
       }
       .time-edit-input:hover, .time-edit-input:focus {
         outline: none;
-        border-color: #999; /* 滑鼠滑過或點擊時才顯示邊框 */
+        border-color: #999; 
         background-color: #fff;
       }
       .time-edit-input:focus {
         outline: none;
-        border-color: #4caf50; /* 點擊編輯時外框變色 */
+        border-color: #4caf50; 
         background-color: #fff;
       }
 
-      /* 🕒 修正：將更改時間的時鐘按鈕縮小 50% */
+      /* 將更改時間的時鐘按鈕縮小 */
       .time-edit-input::-webkit-calendar-picker-indicator {
         transform: scale(0.5);
         transform-origin: center;
         cursor: pointer;
-        margin-left: -10px; /* 縮小後稍微往左靠，避免視覺留白過多 */
+        margin-left: -10px; 
       }
       
       /* --- 圓方塊血條大小與字體調整 --- */
@@ -71,7 +73,7 @@
         border: none; 
         padding: 20px 20px;   
         flex-grow: 1.5;     
-        min-width: 480px;   /* 🛡️ 防止大螢幕下被擠壓變形 */
+        min-width: 480px;   
         margin-left: 45px; 
         margin-right: 30px; 
         display: flex; 
@@ -104,7 +106,7 @@
       /* 熊熊繞圈專用專屬樣式 */
       .countdown-bear {
         position: absolute;
-        font-size: 46px;     /* 🐻 確保熊熊永遠維持大尺寸 */
+        font-size: 46px;     
         z-index: 10;
         pointer-events: none;
         transform: translate(-50%, -50%); 
@@ -117,16 +119,18 @@
       /* --- 課表佈局結構修改 --- */
       .schedule-box { flex: 1; font-size: 42px; display: flex; flex-direction: column; gap: 10px; } 
       
-      .schedule-item { display: flex; flex-direction: column; padding: 10px 22px; border-bottom: 1px solid #eee; min-height: 70px; gap: 8px; align-items: stretch; } 
+      .schedule-item { display: flex; flex-direction: column; padding: 10px 22px; border-bottom: 1px solid #eee; min-height: 70px; gap: 8px; align-items: stretch; transition: background-color 0.2s;} 
+      .schedule-item:hover { background-color: #fafafa; }
       .schedule-item.active { background-color: #fdd835; font-weight: bold; border-radius: 8px; } 
+      .schedule-item.manual-active { border-left: 6px solid #ff9800; background-color: #fff8e1; border-radius: 8px;}
       
       /* --- 課表內容樣式修正 --- */
       .schedule-text-container { display: flex; align-items: center; width: 100%; } 
       
-      /* 1. 縮小科目寬度，拉近與時間的間距 */
+      /* 縮小科目寬度，拉近與時間的間距 */
       .sub-name { width: 110px; flex-shrink: 0; } 
       
-      /* 2. 改為彈性延伸並限制不換行，徹底根除時間後半段被截斷的問題 */
+      /* 改為彈性延伸並限制不換行 */
       .sub-time { flex-grow: 1; flex-shrink: 0; text-align: left; white-space: nowrap; } 
       
       /* 播放器區域 */
@@ -157,7 +161,7 @@
         bottom: 0;                
         left: 0;
         width: 100%;
-        height: 24px;             
+        height: 24px;              
         background: repeating-linear-gradient(
           -45deg,
           #ffdb3a,
@@ -205,7 +209,7 @@
         font-weight: bold;
         padding: 10px 45px;        
         border: none;              
-        background: #212121;       
+        background: #212121;        
         color: white; 
         cursor: pointer; 
         border-radius: 8px; 
@@ -214,7 +218,7 @@
       } 
       
       .submit-btn:hover { 
-        background: #424242;       
+        background: #424242;        
         transform: translateY(-1px); 
         box-shadow: 0 6px 12px rgba(0,0,0,0.15);
       }
@@ -228,8 +232,8 @@
 
       /* --- 英聽原生播放器樣式 --- */
       audio { 
-        width: 435px;           
-        height: 45px;           
+        width: 435px;            
+        height: 45px;            
         outline: none; 
         border-radius: 45px; 
         filter: invert(1) hue-rotate(180deg) contrast(1.2); 
@@ -290,35 +294,20 @@
         to { transform: scale(1); opacity: 1; }
       }
 
-      /* 💻 筆電與低解析度螢幕優化 (RWD) */
+      /* 筆電與低解析度螢幕優化 (RWD) */
       @media (max-width: 900px), (max-height: 650px) {
         .container { padding: 15px; }
-        
-        .header-section { 
-          display: flex; 
-          justify-content: space-between; 
-          align-items: center; 
-          border-bottom: 3px solid #ccc; 
-          padding-bottom: 20px; 
-          margin-bottom: 0px; 
-          flex-shrink: 0; 
-        }
-        
+        .header-section { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #ccc; padding-bottom: 20px; margin-bottom: 0px; flex-shrink: 0; }
         .middle-section { gap: 15px; margin-top: 10px; }
         .schedule-box { gap: 5px; font-size: 40px; }
         .schedule-item { padding: 6px 15px; min-height: 55px; gap: 4px; }
         .reminder-box { padding: 20px 20px 45px 20px; min-height: 150px; font-size: 40px; margin-top: -10px; margin-bottom: -10px;}
         .footer-section { padding: 12px 20px; margin-top: 10px; font-size: 26px; }
-        
         .time-display { font-size: 80px; }
-        
-        /* 🛡️ 筆電模式下維持倒數方塊有足夠寬度，不被時間壓扁 */
         .countdown-box { padding: 30px 10px; min-width: 400px; }
         .countdown-text, #countdown-timer { font-size: 60px; }
         select, input[type="number"], .submit-btn { font-size: 24px; padding: 6px 12px; }
         audio { width: 350px; height: 38px; }
-        
-        /* 3. 移除小螢幕下限制時間寬度的設定，同樣改為自動彈性以防止截斷 */
         .sub-time { width: auto; }
       }
     </style>
@@ -378,7 +367,7 @@
       </div>
     </div>
 
-<script>
+    <script>
       // Firebase Realtime DB URL
       const FIREBASE_DB_URL = "https://exam-e38aa-default-rtdb.asia-southeast1.firebasedatabase.app";
       const USER_DB_URL = "https://user-a354e-default-rtdb.asia-southeast1.firebasedatabase.app";
@@ -399,10 +388,9 @@
       };
       var bearAnimationId = null;
       
-      // 🆕 核心新增：用來記錄老師手動修改或點選的特定科目，達成強制連動
+      // 記錄老師手動修改或點選的特定科目
       var manualSubject = ""; 
 
-      // 當頁面載入時，改為透過 Fetch 請求 Firebase 資料
       window.onload = async function() {
         try {
           var data = await fetchInitialData(currentGrade);
@@ -414,7 +402,6 @@
         }
       };
 
-      // 從 Firebase 獲取班級與課表資料
       async function fetchInitialData(gradeStr) {
         let clsRes = await fetch(`${USER_DB_URL}/class.json`);
         let classData = await clsRes.json();
@@ -448,7 +435,7 @@
                 end: String(endStr),
                 subject: subjStr,
                 hasMusic: !!musicData,
-                music: musicData || ""      
+                music: musicData || ""     
               });
             }
           }
@@ -512,7 +499,6 @@
         }
       }
 
-      // 處理老師手動修改時間的函式
       function updateScheduleTime(index, type, newValue) {
         if (!newValue) return; 
         
@@ -522,17 +508,20 @@
           scheduleData[index].end = newValue;
         }
         
-        // 🎯 核心修改：修改時間時，自動將該欄位的科目指定為連動對象
+        // 修改時間時，強制切換至該科目手動連動狀態
         manualSubject = scheduleData[index].subject;
-        
-        // 修改完後，強制觸發一次時鐘與進度條更新
         updateClock();
       }
 
-      // 🆕 核心新增：點擊整列課表時，也能手動強制切換連動科目的功能
       function selectSubjectManually(subjectName) {
         if (!subjectName || subjectName.includes("無") || subjectName.includes("休")) return;
-        manualSubject = subjectName;
+        
+        // 增強開關切換體驗：如果點擊的已經是手動科目，再次點擊就會取消手動狀態
+        if (manualSubject === subjectName) {
+          manualSubject = "";
+        } else {
+          manualSubject = subjectName;
+        }
         updateClock();
       }
   
@@ -562,11 +551,11 @@
           }
 
           if (hasSubject) {
-            // 🎯 修改點：整列課表加上滑鼠指標樣式與點擊事件，方便隨時點選連動
             div.style.cursor = "pointer";
             div.onclick = function(e) {
-              // 避免點擊 input 輸入框時觸發整列點擊
-              if (e.target.tagName.toLowerCase() !== 'input') {
+              // 避免點擊 input 輸入框或播放器時觸發整列點擊
+              var tag = e.target.tagName.toLowerCase();
+              if (tag !== 'input' && tag !== 'audio' && tag !== 'source') {
                 selectSubjectManually(item.subject);
               }
             };
@@ -695,16 +684,18 @@
         var isExamTime = false;
         var currentStartTime = null;
         var currentEndTime = null;
-        currentSubjectName = "";
+        var autoSubjectName = "";
 
+        // 清除所有課表的高亮與手動狀態樣式
         var items = document.getElementsByClassName('schedule-item');
         for (var i = 0; i < items.length; i++) {
-          items[i].classList.remove('active');
+          items[i].classList.remove('active', 'manual-active');
         }
 
         var percentage = 0;
         var diffMs = 0;
 
+        // 計算目前正常的排程狀態
         for (var i = 0; i < scheduleData.length; i++) {
           if (!scheduleData[i].start || !scheduleData[i].end) continue;
 
@@ -721,7 +712,7 @@
             isExamTime = true;
             currentStartTime = startTime;
             currentEndTime = endTime;
-            currentSubjectName = scheduleData[i].subject;
+            autoSubjectName = scheduleData[i].subject;
             
             diffMs = endTime - now;
             var diffMins = Math.floor(diffMs / 60000);
@@ -733,21 +724,6 @@
             
             if (percentage > 1) percentage = 1;
             if (percentage < 0) percentage = 0;
-
-            var color = "#4caf50";
-            if (percentage > 0.5) {
-              color = "#4caf50"; 
-            } else if (percentage > 0.15) {
-              color = "#ff9800"; 
-            } else {
-              color = "#ff0000"; 
-            }
-            
-            updateSvgProgress(percentage, color);
-            var statusEl = document.getElementById('countdown-status');
-            var timerEl = document.getElementById('countdown-timer');
-            if (statusEl) statusEl.innerText = '剩下：';
-            if (timerEl) timerEl.innerText = `${diffMins}分${diffSecs}秒`;
             break;
           }
         }
@@ -756,80 +732,99 @@
         globalExamState.startTime = currentStartTime;
         globalExamState.endTime = currentEndTime;
 
+        var statusEl = document.getElementById('countdown-status');
+        var timerEl = document.getElementById('countdown-timer');
+        var subEl = document.getElementById('current-subject-label');
+        var reminderContainer = document.getElementById('reminder-text');
         var targetReminderHtml = "";
 
-        if (highlightIndex !== -1) {
-          var hlEl = document.getElementById('schedule-item-' + highlightIndex);
-          if (hlEl) hlEl.classList.add('active');
-        }
+        // 🎯 核心判斷：手動指定狀態具有最高優先級 (對應截圖行為)
+        if (manualSubject !== "") {
+          currentSubjectName = manualSubject;
+          
+          if (subEl) subEl.innerText = currentSubjectName;
+          if (statusEl) statusEl.innerText = '狀態：';
+          if (timerEl) timerEl.innerText = '手動指定';
+          
+          targetReminderHtml = `手動時間調整中，已連動指定科目：【${currentSubjectName}】，可正常輸入並送出缺考人數。`;
+          
+          // 畫面上隱藏進度條色彩，符合截圖單純灰框的設計
+          updateSvgProgress(0, "transparent"); 
+          
+          // 若畫面中有手動指定的科目，給予輕微視覺提示 (可選)
+          for (var j = 0; j < scheduleData.length; j++) {
+            if (scheduleData[j].subject === manualSubject) {
+              var hlEl = document.getElementById('schedule-item-' + j);
+              if (hlEl) hlEl.classList.add('manual-active');
+            }
+          }
 
-        if (isExamTime) {
-          // 🎯 修改點：當自動進入真實考試時間，清除老師手動覆蓋的設定
-          manualSubject = ""; 
-
-          var subEl = document.getElementById('current-subject-label');
+        } else if (isExamTime) {
+          // 正常考試中
+          currentSubjectName = autoSubjectName;
           if (subEl) subEl.innerText = currentSubjectName;
 
+          if (highlightIndex !== -1) {
+            var hlEl = document.getElementById('schedule-item-' + highlightIndex);
+            if (hlEl) hlEl.classList.add('active');
+          }
+
+          var color = "#4caf50";
+          if (percentage > 0.5) { color = "#4caf50"; } 
+          else if (percentage > 0.15) { color = "#ff9800"; } 
+          else { color = "#ff0000"; }
+          
+          updateSvgProgress(percentage, color);
+          if (statusEl) statusEl.innerText = '剩下：';
+          if (timerEl) timerEl.innerText = `${diffMins}分${diffSecs}秒`;
+
+          // 語音播報與動態提醒文字邏輯
           var elapsedMs = now - currentStartTime;
           var elapsedMinutes = Math.floor(elapsedMs / 60000); 
           var elapsedSeconds = Math.floor(elapsedMs / 1000);    
           var remainSeconds = Math.floor(diffMs / 1000);       
-          var reminderText = "";
 
           if (elapsedSeconds >= 25 && elapsedSeconds <= 29 && playedSubjectAnnouncement !== activeIndex) {
             speakText("這節課，考試科目是，" + currentSubjectName + "，請保持安靜！專心作答。");
             playedSubjectAnnouncement = activeIndex; 
           }
-
           if (elapsedSeconds >= 60 && elapsedSeconds <= 64 && playedStartAnnouncement !== activeIndex) {
             speakText("拿到考卷後，請先寫上班級、姓名、座號。");
             playedStartAnnouncement = activeIndex; 
           }
-
           if (remainSeconds <= 60 && remainSeconds >= 56 && playedEndAnnouncement !== activeIndex) {
             speakText("考試即將結束，請檢查班級、姓名、座號是否已填寫。");
             playedEndAnnouncement = activeIndex;   
           }
 
           if (elapsedMinutes < 5) {
-            reminderText = "拿到考卷後，請先寫上班級、姓名、座號。";
+            targetReminderHtml = "拿到考卷後，請先寫上班級、姓名、座號。";
           } else if (elapsedMinutes >= 5 && elapsedMinutes < 10) {
-            reminderText = "如有疑問請舉手示意，等待老師處理。";
+            targetReminderHtml = "如有疑問請舉手示意，等待老師處理。";
           } else if (elapsedMinutes >= 10 && elapsedMinutes < 25) {
-            reminderText = "題目看清楚、寫完要檢查";
+            targetReminderHtml = "題目看清楚、寫完要檢查";
           } else if (elapsedMinutes >= 25 && elapsedMinutes < 35) {
-            reminderText = "作答完成，請檢查完再檢查或趴下休息，保持安靜！";
+            targetReminderHtml = "作答完成，請檢查完再檢查或趴下休息，保持安靜！";
           } else {
-            reminderText = "考試即將結束，請檢查班級、姓名、座號是否已填寫。";
+            targetReminderHtml = "考試即將結束，請檢查班級、姓名、座號是否已填寫。";
           }
-          targetReminderHtml = reminderText;
 
         } else {
-          var statusEl = document.getElementById('countdown-status');
-          var timerEl = document.getElementById('countdown-timer');
-          var subEl = document.getElementById('current-subject-label');
-
-          // 🎯 修改點：如果非正常考試時間，但有「手動選擇或修改科目」
-          if (manualSubject !== "") {
-            currentSubjectName = manualSubject; // 強制設定科目，確保可送出缺考
-            if (subEl) subEl.innerText = currentSubjectName;
-            if (statusEl) statusEl.innerText = '狀態：';
-            if (timerEl) timerEl.innerText = '手動指定';
-            
-            targetReminderHtml = `手動時間調整中，已連動指定科目：【${currentSubjectName}】，可正常輸入並送出缺考人數。`;
-            updateSvgProgress(0, "#ff9800"); // 畫面上給予橘色視覺提示
-          } else {
-            // 完全無手動干預的純休息時間
-            if(statusEl) statusEl.innerText = '休息：';
-            if(timerEl) timerEl.innerText = '非考試中';
-            if(subEl) subEl.innerText = '非考試時間';
-            
-            targetReminderHtml = '非考試時間，請安靜休息或準備下節考試。';
-            updateSvgProgress(0, "#e0e0e0");
+          // 非考試時間
+          currentSubjectName = "";
+          if (statusEl) statusEl.innerText = '休息：';
+          if (timerEl) timerEl.innerText = '非考試中';
+          if (subEl) subEl.innerText = '非考試時間';
+          
+          if (highlightIndex !== -1) {
+            var hlEl = document.getElementById('schedule-item-' + highlightIndex);
+            if (hlEl) hlEl.classList.add('active');
           }
+
+          targetReminderHtml = '非考試時間，請安靜休息或準備下節考試。';
+          updateSvgProgress(0, "#e0e0e0");
         }
 
-        var reminderContainer = document.getElementById('reminder-text');
         if (reminderContainer && reminderContainer.innerHTML !== targetReminderHtml) {
           reminderContainer.innerHTML = targetReminderHtml;
         }
@@ -865,13 +860,16 @@
         var perimeter = 2 * (L_stW + L_stH) + 4 * L_arc; 
 
         var ratio = 0;
-        if (globalExamState.isExam && globalExamState.startTime && globalExamState.endTime) {
+        // 在「手動指定」模式下，或者非考試狀態，熊熊會固定在上方或順順繞圈
+        if (manualSubject === "" && globalExamState.isExam && globalExamState.startTime && globalExamState.endTime) {
           var now = getCorrectedNow();
           var total = globalExamState.endTime - globalExamState.startTime;
           var remaining = globalExamState.endTime - now;
           ratio = remaining / total;
           if (ratio > 1) ratio = 1;
           if (ratio < 0) ratio = 0;
+        } else if (manualSubject !== "") {
+           ratio = 0; // 手動模式讓熊熊固定在正上方起始點 (符合截圖)
         } else {
           var timestamp = new Date().getTime();
           ratio = (timestamp / 12000) % 1; 
@@ -961,7 +959,6 @@
           });
       }
 
-      // 使用 Fetch 更新 Firebase 資料庫
       async function sendDataToBackend(cls, subject, count, ip) {
         var btn = document.querySelector('.submit-btn');
         if (btn) btn.innerText = "傳送中...";
@@ -1024,7 +1021,7 @@
 
           showCustomAlert("資料送出成功！");
           
-          // 🎯 修改點：送出成功後，除了清空人數，也順便清空老師的手動指定狀態
+          // 送出成功後，順便清空老師的手動指定狀態，恢復時鐘自動運作
           manualSubject = "";
           
           if (btn) {
@@ -1034,7 +1031,6 @@
           var countEl = document.getElementById('absence-count');
           if (countEl) countEl.value = "0";
 
-          // 強制重新整理一次時鐘狀態
           updateClock();
 
         } catch (err) {
@@ -1046,15 +1042,13 @@
         }
       }
 
-      // 監聽使用者的第一次點擊，用來解除瀏覽器的語音封印
       document.body.addEventListener('click', function() {
         if ('speechSynthesis' in window) {
           var unlockUtterance = new SpeechSynthesisUtterance('');
           window.speechSynthesis.speak(unlockUtterance);
-          console.log("🔊 語音自動播放權限已解鎖！");
         }
       }, { once: true });
       
-</script>
+    </script>
   </body>
 </html>
