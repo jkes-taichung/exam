@@ -368,6 +368,7 @@
 <script>
       // Firebase Realtime DB URL
       const FIREBASE_DB_URL = "https://exam-e38aa-default-rtdb.asia-southeast1.firebasedatabase.app";
+      const USER_DB_URL = "https://user-a354e-default-rtdb.asia-southeast1.firebasedatabase.app";
       var urlParams = new URLSearchParams(window.location.search);
       var currentGrade = urlParams.get('grade');
       var scheduleData = [];
@@ -384,11 +385,6 @@
         endTime: null
       };
       var bearAnimationId = null;
-
-      // 當頁面載入時，改為透過 Fetch 請求 Firebase 資料
-     // 🆕 請確保在程式碼最上方的全域變數區有這兩行網址
-       const USER_DB_URL = "https://user-a354e-default-rtdb.asia-southeast1.firebasedatabase.app";
-      // var urlParams = ... (保留你原本其他的變數)
 
       // 當頁面載入時，改為透過 Fetch 請求 Firebase 資料
       window.onload = async function() {
@@ -450,6 +446,7 @@
         }
         return { classes: classes, schedule: scheduleList };
       }
+
       function initPage(data) {
         var select = document.getElementById('class-select');
         
@@ -486,8 +483,7 @@
         setInterval(function() { syncServerTime(false); }, 19 * 60 * 1000);
       }
 
-      // 改用第三方 API (WorldTimeAPI) 來抓取標準時間
-// 終極防護：讀取自己網頁 (GitHub Pages) 的伺服器時間標頭
+      // 終極防護：讀取自己網頁 (GitHub Pages) 的伺服器時間標頭
       async function syncServerTime(isInitialLoad) {
         try {
           // 對目前的網頁發送 HEAD 請求，不下載內容，只抓標頭
@@ -537,7 +533,7 @@
         updateClock();
       }
   
- function renderSchedule() {
+      function renderSchedule() {
         var container = document.getElementById('schedule-container');
         container.innerHTML = '';
         
@@ -564,13 +560,13 @@
           }
 
           if (hasSubject) {
-            // 🎯 修改點：將純文字的 sub-time 替換為可編輯的時間輸入框 (input type="time")
+            // 🎯 修改點：加入 flex 排版與可編輯的時間輸入框，確保在同一行顯示
             div.innerHTML = `
-              <div class="schedule-text-container">
-                <span class="sub-name">${item.subject}</span>
-                <span class="sub-time">
+              <div class="schedule-text-container" style="display: flex; align-items: center; flex-wrap: nowrap;">
+                <span class="sub-name" style="margin-right: 15px; min-width: 60px;">${item.subject}</span>
+                <span class="sub-time" style="display: flex; align-items: center; white-space: nowrap;">
                   <input type="time" class="time-edit-input" value="${item.start}" onchange="updateScheduleTime(${index}, 'start', this.value)">
-                  ~
+                  <span style="margin: 0 5px;">~</span>
                   <input type="time" class="time-edit-input" value="${item.end}" onchange="updateScheduleTime(${index}, 'end', this.value)">
                 </span>
               </div>
@@ -578,7 +574,7 @@
             `;
           } else {
             div.innerHTML = `
-              <div class="schedule-text-container">
+              <div class="schedule-text-container" style="display: flex; align-items: center;">
                 <span class="sub-name">${item.subject || ''}</span>
                 <span class="sub-time"></span>
               </div>
@@ -590,7 +586,7 @@
       }
 
 
-  function triggerBackgroundAudioLoad() {
+      function triggerBackgroundAudioLoad() {
         scheduleData.forEach(function(item) {
           if (item.subject && typeof item.subject === 'string' && item.subject.indexOf('英文') !== -1 && item.hasMusic) {
             var audioUrl = item.music || "";
