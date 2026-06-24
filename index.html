@@ -377,19 +377,41 @@
       var currentSubjectName = "";
       var timeOffset = 0; 
 
-      var playedStartAnnouncement = -1;
-      var playedEndAnnouncement = -1;
-      var playedSubjectAnnouncement = -1; 
-
       var globalExamState = {
         isExam: false,
         startTime: null,
         endTime: null
       };
       var bearAnimationId = null;
-      
-      // 記錄老師手動修改或點選的特定科目
       var manualSubject = ""; 
+
+      // --- 語音狀態變數 ---
+      var currentExamPeriod = -1; 
+      var hasSpokenStart = false;
+      var hasSpokenEnd = false;
+
+      // 網頁載入後，監聽第一次點擊以解鎖瀏覽器語音權限
+      document.addEventListener('click', function unlockAudio() {
+        if ('speechSynthesis' in window) {
+          var unlockMsg = new SpeechSynthesisUtterance('');
+          window.speechSynthesis.speak(unlockMsg);
+        }
+        document.removeEventListener('click', unlockAudio);
+      }, { once: true });
+
+      // 語音播放函數
+      function speakText(text) {
+        if ('speechSynthesis' in window) {
+          // 確保上一句講完或取消，避免卡住
+          window.speechSynthesis.cancel();
+          var msg = new SpeechSynthesisUtterance();
+          msg.text = text;
+          msg.lang = 'zh-TW';
+          msg.rate = 1.0;  // 語速
+          msg.pitch = 1.0; // 音調
+          window.speechSynthesis.speak(msg);
+        }
+      }
 
       window.onload = async function() {
         try {
@@ -516,7 +538,6 @@
       function selectSubjectManually(subjectName) {
         if (!subjectName || subjectName.includes("無") || subjectName.includes("休")) return;
         
-        // 增強開關切換體驗：如果點擊的已經是手動科目，再次點擊就會取消手動狀態
         if (manualSubject === subjectName) {
           manualSubject = "";
         } else {
@@ -553,7 +574,6 @@
           if (hasSubject) {
             div.style.cursor = "pointer";
             div.onclick = function(e) {
-              // 避免點擊 input 輸入框或播放器時觸發整列點擊
               var tag = e.target.tagName.toLowerCase();
               if (tag !== 'input' && tag !== 'audio' && tag !== 'source') {
                 selectSubjectManually(item.subject);
@@ -617,16 +637,6 @@
         var now = getCorrectedNow(); 
         now.setHours(parseInt(parts[0], 10) || 0, parseInt(parts[1], 10) || 0, 0, 0);
         return now;
-      }
-
-      function speakText(text) {
-        if ('speechSynthesis' in window) {
-          window.speechSynthesis.cancel(); 
-          var utterance = new SpeechSynthesisUtterance(text);
-          utterance.lang = 'zh-TW';
-          utterance.rate = 0.92;    
-          window.speechSynthesis.speak(utterance);
-        }
       }
 
       function updateSvgProgress(percentage, color) {
@@ -695,7 +705,6 @@
         var percentage = 0;
         var diffMs = 0;
 
-        // 計算目前正常的排程狀態
         for (var i = 0; i < scheduleData.length; i++) {
           if (!scheduleData[i].start || !scheduleData[i].end) continue;
 
@@ -728,6 +737,15 @@
           }
         }
 
+        // 偵測是否換了節次，如果是，重置語音播報的旗標
+        if (isExamTime && currentExamPeriod !== activeIndex) {
+            currentExamPeriod = activeIndex;
+            hasSpokenStart = false;
+            hasSpokenEnd = false;
+        } else if (!isExamTime) {
+            currentExamPeriod = -1;
+        }
+
         globalExamState.isExam = isExamTime;
         globalExamState.startTime = currentStartTime;
         globalExamState.endTime = currentEndTime;
@@ -738,7 +756,6 @@
         var reminderContainer = document.getElementById('reminder-text');
         var targetReminderHtml = "";
 
-        // 🎯 核心判斷：手動指定狀態具有最高優先級 (對應截圖行為)
         if (manualSubject !== "") {
           currentSubjectName = manualSubject;
           
@@ -748,10 +765,8 @@
           
           targetReminderHtml = `手動時間調整中，已連動指定科目：【${currentSubjectName}】，可正常輸入並送出缺考人數。`;
           
-          // 畫面上隱藏進度條色彩，符合截圖單純灰框的設計
           updateSvgProgress(0, "transparent"); 
           
-          // 若畫面中有手動指定的科目，給予輕微視覺提示 (可選)
           for (var j = 0; j < scheduleData.length; j++) {
             if (scheduleData[j].subject === manualSubject) {
               var hlEl = document.getElementById('schedule-item-' + j);
@@ -778,23 +793,21 @@
           if (statusEl) statusEl.innerText = '剩下：';
           if (timerEl) timerEl.innerText = `${diffMins}分${diffSecs}秒`;
 
-          // 語音播報與動態提醒文字邏輯
+          // --- 語音及文字動態提醒邏輯 ---
           var elapsedMs = now - currentStartTime;
           var elapsedMinutes = Math.floor(elapsedMs / 60000); 
-          var elapsedSeconds = Math.floor(elapsedMs / 1000);    
-          var remainSeconds = Math.floor(diffMs / 1000);       
+          var remainingMinutes = Math.floor(diffMs / 60000);
 
-          if (elapsedSeconds >= 25 && elapsedSeconds <= 29 && playedSubjectAnnouncement !== activeIndex) {
-            speakText("這節課，考試科目是，" + currentSubjectName + "，請保持安靜！專心作答。");
-            playedSubjectAnnouncement = activeIndex; 
+          // 考試剛開始第一分鐘內播報
+          if (elapsedMs >= 0 && elapsedMs < 60000 && !hasSpokenStart) {
+            speakText("考試開始，請先寫上班級、姓名、座號。");
+            hasSpokenStart = true;
           }
-          if (elapsedSeconds >= 60 && elapsedSeconds <= 64 && playedStartAnnouncement !== activeIndex) {
-            speakText("拿到考卷後，請先寫上班級、姓名、座號。");
-            playedStartAnnouncement = activeIndex; 
-          }
-          if (remainSeconds <= 60 && remainSeconds >= 56 && playedEndAnnouncement !== activeIndex) {
+
+          // 考試剩下最後一分鐘內播報
+          if (remainingMinutes === 0 && diffMs <= 60000 && diffMs > 0 && !hasSpokenEnd) {
             speakText("考試即將結束，請檢查班級、姓名、座號是否已填寫。");
-            playedEndAnnouncement = activeIndex;   
+            hasSpokenEnd = true;
           }
 
           if (elapsedMinutes < 5) {
@@ -860,7 +873,6 @@
         var perimeter = 2 * (L_stW + L_stH) + 4 * L_arc; 
 
         var ratio = 0;
-        // 在「手動指定」模式下，或者非考試狀態，熊熊會固定在上方或順順繞圈
         if (manualSubject === "" && globalExamState.isExam && globalExamState.startTime && globalExamState.endTime) {
           var now = getCorrectedNow();
           var total = globalExamState.endTime - globalExamState.startTime;
@@ -869,7 +881,7 @@
           if (ratio > 1) ratio = 1;
           if (ratio < 0) ratio = 0;
         } else if (manualSubject !== "") {
-           ratio = 0; // 手動模式讓熊熊固定在正上方起始點 (符合截圖)
+           ratio = 0; 
         } else {
           var timestamp = new Date().getTime();
           ratio = (timestamp / 12000) % 1; 
@@ -1021,7 +1033,6 @@
 
           showCustomAlert("資料送出成功！");
           
-          // 送出成功後，順便清空老師的手動指定狀態，恢復時鐘自動運作
           manualSubject = "";
           
           if (btn) {
@@ -1041,14 +1052,6 @@
           }
         }
       }
-
-      document.body.addEventListener('click', function() {
-        if ('speechSynthesis' in window) {
-          var unlockUtterance = new SpeechSynthesisUtterance('');
-          window.speechSynthesis.speak(unlockUtterance);
-        }
-      }, { once: true });
-      
     </script>
   </body>
 </html>
