@@ -35,18 +35,21 @@
       .time-display { font-size: 132px; font-weight: bold; white-space: nowrap; } 
 
       /* 🆕 新增：美化時間輸入框，使其融入原本版面 */
-    .time-edit-input {
-      font-size: inherit; /* 繼承原本時間的字體大小 */
+ .time-edit-input {
+      font-size: inherit; 
       font-family: inherit;
       color: #333;
       background-color: transparent;
-      border: 1px solid #ccc; /* 加上淺色邊框提示可編輯 */
+      border: 1px solid transparent; /* 預設隱藏邊框，看起來像純文字 */
       border-radius: 5px;
-      padding: 2px 5px;
-      margin: 0 5px;
+      padding: 0px 2px; /* 減少左右留白 */
       cursor: pointer;
     }
-    
+    .time-edit-input:hover, .time-edit-input:focus {
+      outline: none;
+      border-color: #999; /* 滑鼠滑過或點擊時才顯示邊框 */
+      background-color: #fff;
+    }
     .time-edit-input:focus {
       outline: none;
       border-color: #4caf50; /* 點擊編輯時外框變色 */
