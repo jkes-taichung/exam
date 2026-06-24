@@ -33,6 +33,25 @@
       
       /* 現在時間字體 */
       .time-display { font-size: 132px; font-weight: bold; white-space: nowrap; } 
+
+      /* 🆕 新增：美化時間輸入框，使其融入原本版面 */
+    .time-edit-input {
+      font-size: inherit; /* 繼承原本時間的字體大小 */
+      font-family: inherit;
+      color: #333;
+      background-color: transparent;
+      border: 1px solid #ccc; /* 加上淺色邊框提示可編輯 */
+      border-radius: 5px;
+      padding: 2px 5px;
+      margin: 0 5px;
+      cursor: pointer;
+    }
+    
+    .time-edit-input:focus {
+      outline: none;
+      border-color: #4caf50; /* 點擊編輯時外框變色 */
+      background-color: #fff;
+    }
       
       /* --- 圓方塊血條大小與字體調整 --- */
       .countdown-box { 
@@ -500,7 +519,22 @@
           startBearAnimationLoop();
         }
       }
-      function renderSchedule() {
+
+      // 🆕 新增：處理老師手動修改時間的函式
+      function updateScheduleTime(index, type, newValue) {
+        if (!newValue) return; // 如果清空則不處理
+        
+        if (type === 'start') {
+          scheduleData[index].start = newValue;
+        } else if (type === 'end') {
+          scheduleData[index].end = newValue;
+        }
+        
+        // 修改完後，強制觸發一次時鐘與進度條更新
+        updateClock();
+      }
+  
+ function renderSchedule() {
         var container = document.getElementById('schedule-container');
         container.innerHTML = '';
         
@@ -527,10 +561,15 @@
           }
 
           if (hasSubject) {
+            // 🎯 修改點：將純文字的 sub-time 替換為可編輯的時間輸入框 (input type="time")
             div.innerHTML = `
               <div class="schedule-text-container">
                 <span class="sub-name">${item.subject}</span>
-                <span class="sub-time">${item.start}~${item.end}</span>
+                <span class="sub-time">
+                  <input type="time" class="time-edit-input" value="${item.start}" onchange="updateScheduleTime(${index}, 'start', this.value)">
+                  ~
+                  <input type="time" class="time-edit-input" value="${item.end}" onchange="updateScheduleTime(${index}, 'end', this.value)">
+                </span>
               </div>
               <span class="sub-audio-zone" id="audio-zone-${item.period}">${audioZoneContent}</span>
             `;
