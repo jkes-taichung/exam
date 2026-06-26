@@ -906,75 +906,59 @@
       }
 
       // 改為使用 Fetch 更新 Firebase 資料庫，取代原 GAS 邏輯
-    async function sendDataToBackend(cls, subject, count, ip) {
+   async function sendDataToBackend(cls, subject, count, ip) {
         var btn = document.querySelector('.submit-btn');
         if (btn) btn.innerText = "傳送中...";
         
         try {
           let localNow = getCorrectedNow(); 
           
+          // 格式化當前時間為：2026/6/23 上午 10:30:14
           let todayDateStr = localNow.toLocaleString('zh-TW', { 
             timeZone: 'Asia/Taipei', 
             hour12: true 
           }).replace('上午', '上午 ').replace('下午', '下午 ');
 
-          let dateOnlyStr = localNow.toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei' });
-
+          // 1. 先讀取目前「缺考」節點下的所有資料，目的是計算下一個流水號 (Max Index)
           let res = await fetch(`${FIREBASE_DB_URL}/exam/缺考.json`);
           let absences = await res.json() || {};
 
-          let targetKey = null;
           let maxIndex = -1;
-
           for (let key in absences) {
-            if (!isNaN(key)) maxIndex = Math.max(maxIndex, parseInt(key));
-            let record = absences[key];
-            
-            if (record && record.班級 === cls && record.日期 && record.日期.startsWith(dateOnlyStr)) {
-              targetKey = key;
+            if (!isNaN(key)) {
+              maxIndex = Math.max(maxIndex, parseInt(key));
             }
           }
+          let newIndex = maxIndex + 1;
 
-          if (targetKey !== null) {
-            let patchData = {};
-            patchData[subject] = parseInt(count);
-            patchData.ip = ip;
-            patchData.日期 = todayDateStr; 
-            
-            await fetch(`${FIREBASE_DB_URL}/exam/缺考/${targetKey}.json`, {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(patchData)
-            });
-          } else {
-            let newIndex = maxIndex + 1;
-            let newData = {
-              ip: ip,
-              日期: todayDateStr, 
-              班級: cls,
-              // 【修正點】：將原本預設的 0 全部改為空字串 ""
-              國語: subject === '國語' ? parseInt(count) : "",
-              數學: subject === '數學' ? parseInt(count) : "",
-              生活: subject === '生活' ? parseInt(count) : "",
-              社會: subject === '社會' ? parseInt(count) : "",
-              自然: subject === '自然' ? parseInt(count) : "",
-              英文: subject === '英文' ? parseInt(count) : ""
-            };
-            
-            await fetch(`${FIREBASE_DB_URL}/exam/缺考/${newIndex}.json`, {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(newData)
-            });
-          }
+          // 2. 建立全新的單筆結構：將「科目」與「缺考人數」抽成獨立欄位
+          let newData = {
+            ip: ip,
+            日期: todayDateStr, 
+            班級: cls,
+            科目: subject,            // 新增：直接記錄本次科目名稱
+            缺考人數: parseInt(count)  // 新增：直接記錄人數
+          };
+          
+          // 3. 直接用 PUT 寫入全新的流水號節點中
+          await fetch(`${FIREBASE_DB_URL}/exam/缺考/${newIndex}.json`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newData)
+          });
 
           showCustomAlert("資料送出成功！");
+          
+          // 成功後重置狀態
+          manualSubject = "";
           if (btn) {
             btn.innerText = "送出";
             btn.disabled = false;
           }
           var countEl = document.getElementById('absence-count');
           if (countEl) countEl.value = "0";
+
+          updateClock();
 
         } catch (err) {
           showCustomAlert("發生錯誤：" + err.message);
