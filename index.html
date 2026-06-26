@@ -1,9 +1,7 @@
 <!DOCTYPE html>
-<html lang="zh-TW">
+<html>
   <head>
-    <meta charset="UTF-8">
     <base target="_top">
-    <title>考試倒數計時系統</title>
     <style>
       /* 調整為滿版設計 */
       html, body { 
@@ -35,36 +33,6 @@
       
       /* 現在時間字體 */
       .time-display { font-size: 132px; font-weight: bold; white-space: nowrap; } 
-
-      /* 美化時間輸入框，使其融入原本版面 */
-      .time-edit-input {
-        font-size: inherit; 
-        font-family: inherit;
-        color: #333;
-        background-color: transparent;
-        border: 1px solid transparent; 
-        border-radius: 5px;
-        padding: 0px 2px; 
-        cursor: pointer;
-      }
-      .time-edit-input:hover, .time-edit-input:focus {
-        outline: none;
-        border-color: #999; 
-        background-color: #fff;
-      }
-      .time-edit-input:focus {
-        outline: none;
-        border-color: #4caf50; 
-        background-color: #fff;
-      }
-
-      /* 將更改時間的時鐘按鈕縮小 */
-      .time-edit-input::-webkit-calendar-picker-indicator {
-        transform: scale(0.5);
-        transform-origin: center;
-        cursor: pointer;
-        margin-left: -10px; 
-      }
       
       /* --- 圓方塊血條大小與字體調整 --- */
       .countdown-box { 
@@ -73,7 +41,7 @@
         border: none; 
         padding: 20px 20px;   
         flex-grow: 1.5;     
-        min-width: 480px;   
+        min-width: 480px;   /* 🛡️ 防止大螢幕下被擠壓變形 */
         margin-left: 45px; 
         margin-right: 30px; 
         display: flex; 
@@ -106,7 +74,7 @@
       /* 熊熊繞圈專用專屬樣式 */
       .countdown-bear {
         position: absolute;
-        font-size: 46px;     
+        font-size: 46px;     /* 🐻 確保熊熊永遠維持大尺寸 */
         z-index: 10;
         pointer-events: none;
         transform: translate(-50%, -50%); 
@@ -119,19 +87,14 @@
       /* --- 課表佈局結構修改 --- */
       .schedule-box { flex: 1; font-size: 42px; display: flex; flex-direction: column; gap: 10px; } 
       
-      .schedule-item { display: flex; flex-direction: column; padding: 10px 22px; border-bottom: 1px solid #eee; min-height: 70px; gap: 8px; align-items: stretch; transition: background-color 0.2s;} 
-      .schedule-item:hover { background-color: #fafafa; }
+      .schedule-item { display: flex; flex-direction: column; padding: 10px 22px; border-bottom: 1px solid #eee; min-height: 70px; gap: 8px; align-items: stretch; } 
       .schedule-item.active { background-color: #fdd835; font-weight: bold; border-radius: 8px; } 
-      .schedule-item.manual-active { border-left: 6px solid #ff9800; background-color: #fff8e1; border-radius: 8px;}
       
-      /* --- 課表內容樣式修正 --- */
+      /* --- 課表內容樣式 --- */
       .schedule-text-container { display: flex; align-items: center; width: 100%; } 
       
-      /* 縮小科目寬度，拉近與時間的間距 */
-      .sub-name { width: 110px; flex-shrink: 0; } 
-      
-      /* 改為彈性延伸並限制不換行 */
-      .sub-time { flex-grow: 1; flex-shrink: 0; text-align: left; white-space: nowrap; } 
+      .sub-name { width: 150px; flex-shrink: 0; } 
+      .sub-time { width: 300px; flex-shrink: 0; text-align: left; } 
       
       /* 播放器區域 */
       .sub-audio-zone { display: flex; align-items: center; justify-content: flex-start; width: 100%; margin-left: 0; margin-top: 5px;} 
@@ -161,7 +124,7 @@
         bottom: 0;                
         left: 0;
         width: 100%;
-        height: 24px;              
+        height: 24px;             
         background: repeating-linear-gradient(
           -45deg,
           #ffdb3a,
@@ -209,7 +172,7 @@
         font-weight: bold;
         padding: 10px 45px;        
         border: none;              
-        background: #212121;        
+        background: #212121;       
         color: white; 
         cursor: pointer; 
         border-radius: 8px; 
@@ -218,7 +181,7 @@
       } 
       
       .submit-btn:hover { 
-        background: #424242;        
+        background: #424242;       
         transform: translateY(-1px); 
         box-shadow: 0 6px 12px rgba(0,0,0,0.15);
       }
@@ -232,8 +195,8 @@
 
       /* --- 英聽原生播放器樣式 --- */
       audio { 
-        width: 435px;            
-        height: 45px;            
+        width: 435px;           
+        height: 45px;           
         outline: none; 
         border-radius: 45px; 
         filter: invert(1) hue-rotate(180deg) contrast(1.2); 
@@ -294,21 +257,34 @@
         to { transform: scale(1); opacity: 1; }
       }
 
-      /* 筆電與低解析度螢幕優化 (RWD) */
+      /* 💻 筆電與低解析度螢幕優化 (RWD) */
       @media (max-width: 900px), (max-height: 650px) {
         .container { padding: 15px; }
-        .header-section { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #ccc; padding-bottom: 20px; margin-bottom: 0px; flex-shrink: 0; }
+        
+        .header-section { 
+          display: flex; 
+          justify-content: space-between; 
+          align-items: center; 
+          border-bottom: 3px solid #ccc; 
+          padding-bottom: 20px; 
+          margin-bottom: 0px; 
+          flex-shrink: 0; 
+        }
+        
         .middle-section { gap: 15px; margin-top: 10px; }
         .schedule-box { gap: 5px; font-size: 40px; }
         .schedule-item { padding: 6px 15px; min-height: 55px; gap: 4px; }
         .reminder-box { padding: 20px 20px 45px 20px; min-height: 150px; font-size: 40px; margin-top: -10px; margin-bottom: -10px;}
         .footer-section { padding: 12px 20px; margin-top: 10px; font-size: 26px; }
+        
         .time-display { font-size: 80px; }
+        
+        /* 🛡️ 筆電模式下維持倒數方塊有足夠寬度，不被時間壓扁 */
         .countdown-box { padding: 30px 10px; min-width: 400px; }
         .countdown-text, #countdown-timer { font-size: 60px; }
         select, input[type="number"], .submit-btn { font-size: 24px; padding: 6px 12px; }
         audio { width: 350px; height: 38px; }
-        .sub-time { width: auto; }
+        .sub-time { width: 200px; }
       }
     </style>
   </head>
@@ -367,15 +343,18 @@
       </div>
     </div>
 
-    <script>
+<script>
       // Firebase Realtime DB URL
       const FIREBASE_DB_URL = "https://exam-e38aa-default-rtdb.asia-southeast1.firebasedatabase.app";
-      const USER_DB_URL = "https://user-a354e-default-rtdb.asia-southeast1.firebasedatabase.app";
       var urlParams = new URLSearchParams(window.location.search);
       var currentGrade = urlParams.get('grade');
       var scheduleData = [];
       var currentSubjectName = "";
       var timeOffset = 0; 
+
+      var playedStartAnnouncement = -1;
+      var playedEndAnnouncement = -1;
+      var playedSubjectAnnouncement = -1; 
 
       var globalExamState = {
         isExam: false,
@@ -383,58 +362,43 @@
         endTime: null
       };
       var bearAnimationId = null;
-      var manualSubject = ""; 
 
-      // --- 語音狀態變數 ---
-      var currentExamPeriod = -1; 
-      var hasSpokenStart = false;
-      var hasSpokenEnd = false;
+      // 當頁面載入時，改為透過 Fetch 請求 Firebase 資料
+     // 🆕 請確保在程式碼最上方的全域變數區有這兩行網址
+       const USER_DB_URL = "https://user-a354e-default-rtdb.asia-southeast1.firebasedatabase.app";
+      // var urlParams = ... (保留你原本其他的變數)
 
-      // 網頁載入後，監聽第一次點擊以解鎖瀏覽器語音權限
-      document.addEventListener('click', function unlockAudio() {
-        if ('speechSynthesis' in window) {
-          var unlockMsg = new SpeechSynthesisUtterance('');
-          window.speechSynthesis.speak(unlockMsg);
-        }
-        document.removeEventListener('click', unlockAudio);
-      }, { once: true });
-
-      // 語音播放函數
-      function speakText(text) {
-        if ('speechSynthesis' in window) {
-          // 確保上一句講完或取消，避免卡住
-          window.speechSynthesis.cancel();
-          var msg = new SpeechSynthesisUtterance();
-          msg.text = text;
-          msg.lang = 'zh-TW';
-          msg.rate = 1.0;  // 語速
-          msg.pitch = 1.0; // 音調
-          window.speechSynthesis.speak(msg);
-        }
-      }
-
+      // 當頁面載入時，改為透過 Fetch 請求 Firebase 資料
       window.onload = async function() {
         try {
           var data = await fetchInitialData(currentGrade);
           initPage(data);
         } catch (error) {
           console.error("載入初始資料失敗：", error);
+          // 強化錯誤顯示：把真正的錯誤原因印在畫面上，方便抓蟲
           document.getElementById('clock').innerText = "系統異常";
           document.getElementById('schedule-container').innerHTML = `<div style="padding:22px; color:red; font-size:20px;">資料載入失敗！<br><br>錯誤原因：${error.message}<br><br>請檢查 Firebase 資料庫是否有空白或格式錯誤。</div>`;
         }
       };
 
+      // 從 Firebase 獲取班級與課表資料
       async function fetchInitialData(gradeStr) {
+        // 🎯 1. 抓取班級清單 (修改點：改從 USER_DB_URL 抓取，路徑為 class.json)
         let clsRes = await fetch(`${USER_DB_URL}/class.json`);
         let classData = await clsRes.json();
+        
+        // ⚠️ 修改點：因為你的班級名稱變成了 JSON 的 Key，所以改用 Object.keys()
         let classes = classData ? Object.values(classData) : [];
 
+        // 2. 抓取時間/課表設定 (維持原本邏輯，從 FIREBASE_DB_URL 抓取)
         let timeRes = await fetch(`${FIREBASE_DB_URL}/exam/時間.json`);
         let timeData = await timeRes.json();
 
         let scheduleObj = null;
         if (timeData) {
+          // 找到對應目前年級的設定 (grade: 101 等)
           for (let key in timeData) {
+            // 🛡️ 防當機裝甲：加上 timeData[key] != null 的判斷
             if (timeData[key] && String(timeData[key].grade) === String(gradeStr)) {
               scheduleObj = timeData[key];
               break;
@@ -453,36 +417,42 @@
             if (startStr && subjStr) {
               scheduleList.push({
                 period: i,
-                start: String(startStr), 
+                start: String(startStr), // 🛡️ 防當機：強制轉字串，避免 Firebase 把 "08:00" 變數字
                 end: String(endStr),
                 subject: subjStr,
                 hasMusic: !!musicData,
-                music: musicData || ""     
+                music: musicData || ""      // 🎯 維持您原本的 music 設定
               });
             }
           }
         }
         return { classes: classes, schedule: scheduleList };
       }
-
       function initPage(data) {
         var select = document.getElementById('class-select');
+        
+        // 🎯 1. 建立阿拉伯數字與中文年級的對照表
         const gradeMap = {
           '1': '一', '2': '二', '3': '三', '4': '四',
           '5': '五', '6': '六', '7': '七', '8': '八', '9': '九'
         };
 
+        // 🎯 2. 取得目前年級的第一個數字 (例如："401" -> "4", "102" -> "1")
         var firstDigit = String(currentGrade).charAt(0);
-        var targetChinesePrefix = gradeMap[firstDigit]; 
+        var targetChinesePrefix = gradeMap[firstDigit]; // 對應出 "四" 或 "一"
 
         data.classes.forEach(function(cls) {
-          if (cls) { 
+          if (cls) { // 🛡️ 防當機：濾掉 Firebase 的空班級
+            
+            // 🎯 3. 檢查班級的第一個字是否符合對應的中文年級 (例如："四年1班" 是否以 "四" 開頭)
+            // 🛡️ 安全機制：如果網址沒帶參數或對照失敗，則預設顯示所有班級，避免選單全空
             if (!targetChinesePrefix || cls.startsWith(targetChinesePrefix)) {
               var opt = document.createElement('option');
               opt.value = cls;
               opt.innerHTML = cls;
               select.appendChild(opt);
             }
+            
           }
         });
 
@@ -494,16 +464,25 @@
         setInterval(function() { syncServerTime(false); }, 19 * 60 * 1000);
       }
 
+      // 改用第三方 API (WorldTimeAPI) 來抓取標準時間
+// 終極防護：讀取自己網頁 (GitHub Pages) 的伺服器時間標頭
       async function syncServerTime(isInitialLoad) {
         try {
+          // 對目前的網頁發送 HEAD 請求，不下載內容，只抓標頭
+          // cache: 'no-store' 確保每次都向伺服器要最新時間，不使用瀏覽器暫存
           let response = await fetch(window.location.href, { 
             method: 'HEAD', 
             cache: 'no-store' 
           });
+          
+          // 抓取伺服器回傳的 Date 標頭 (標準 GMT 時間)
           let dateHeader = response.headers.get('Date');
+          
           if (dateHeader) {
             let serverTimestamp = new Date(dateHeader).getTime();
             let localTimestamp = new Date().getTime();
+            
+            // 計算誤差值
             timeOffset = serverTimestamp - localTimestamp; 
           } else {
             throw new Error("伺服器未回傳 Date 標頭");
@@ -513,6 +492,7 @@
           timeOffset = 0;
         }
 
+        // 第一次載入時，啟動時鐘與動畫
         if (isInitialLoad) {
           updateClock(); 
           setInterval(updateClock, 1000); 
@@ -520,36 +500,11 @@
           startBearAnimationLoop();
         }
       }
-
-      function updateScheduleTime(index, type, newValue) {
-        if (!newValue) return; 
-        
-        if (type === 'start') {
-          scheduleData[index].start = newValue;
-        } else if (type === 'end') {
-          scheduleData[index].end = newValue;
-        }
-        
-        // 修改時間時，強制切換至該科目手動連動狀態
-        manualSubject = scheduleData[index].subject;
-        updateClock();
-      }
-
-      function selectSubjectManually(subjectName) {
-        if (!subjectName || subjectName.includes("無") || subjectName.includes("休")) return;
-        
-        if (manualSubject === subjectName) {
-          manualSubject = "";
-        } else {
-          manualSubject = subjectName;
-        }
-        updateClock();
-      }
-  
       function renderSchedule() {
         var container = document.getElementById('schedule-container');
         container.innerHTML = '';
         
+        // 🛡️ 防當機：如果課表沒抓到，顯示提示而不是空白
         if (scheduleData.length === 0) {
             container.innerHTML = '<div style="padding:15px; color:#666;">無此年級的課表資料。</div>';
             return;
@@ -572,28 +527,16 @@
           }
 
           if (hasSubject) {
-            div.style.cursor = "pointer";
-            div.onclick = function(e) {
-              var tag = e.target.tagName.toLowerCase();
-              if (tag !== 'input' && tag !== 'audio' && tag !== 'source') {
-                selectSubjectManually(item.subject);
-              }
-            };
-
             div.innerHTML = `
-              <div class="schedule-text-container" style="display: flex; align-items: center; flex-wrap: nowrap;">
-                <span class="sub-name" style="margin-right: 15px; min-width: 60px;">${item.subject}</span>
-                <span class="sub-time" style="display: flex; align-items: center; white-space: nowrap;">
-                  <input type="time" class="time-edit-input" value="${item.start}" onchange="updateScheduleTime(${index}, 'start', this.value)">
-                  <span style="margin: 0 5px;">~</span>
-                  <input type="time" class="time-edit-input" value="${item.end}" onchange="updateScheduleTime(${index}, 'end', this.value)">
-                </span>
+              <div class="schedule-text-container">
+                <span class="sub-name">${item.subject}</span>
+                <span class="sub-time">${item.start}~${item.end}</span>
               </div>
               <span class="sub-audio-zone" id="audio-zone-${item.period}">${audioZoneContent}</span>
             `;
           } else {
             div.innerHTML = `
-              <div class="schedule-text-container" style="display: flex; align-items: center;">
+              <div class="schedule-text-container">
                 <span class="sub-name">${item.subject || ''}</span>
                 <span class="sub-time"></span>
               </div>
@@ -604,11 +547,13 @@
         });
       }
 
-      function triggerBackgroundAudioLoad() {
+
+  function triggerBackgroundAudioLoad() {
         scheduleData.forEach(function(item) {
           if (item.subject && typeof item.subject === 'string' && item.subject.indexOf('英文') !== -1 && item.hasMusic) {
             var audioUrl = item.music || "";
             var zone = document.getElementById('audio-zone-' + item.period);
+            
             if (!zone) return;
 
             if (audioUrl === "") {
@@ -616,8 +561,9 @@
               return; 
             }
 
+            // 直接將 Firebase 抓到的網址作為音檔來源
             zone.innerHTML = `
-               <audio controls controlsList="nodownload" preload="metadata" crossorigin="anonymous">
+           <audio controls controlsList="nodownload" preload="metadata" crossorigin="anonymous">
                 <source src="${audioUrl}" type="audio/mpeg">
                 您的瀏覽器不支援音訊播放。
               </audio>
@@ -632,6 +578,7 @@
       }
 
       function parseTime(timeStr) {
+        // 🛡️ 防當機：確保時間字串存在且可切割
         if (!timeStr || typeof timeStr.split !== 'function') return new Date();
         var parts = timeStr.split(':');
         var now = getCorrectedNow(); 
@@ -639,15 +586,27 @@
         return now;
       }
 
+      function speakText(text) {
+        if ('speechSynthesis' in window) {
+          window.speechSynthesis.cancel(); 
+          var utterance = new SpeechSynthesisUtterance(text);
+          utterance.lang = 'zh-TW';
+          utterance.rate = 0.92;    
+          window.speechSynthesis.speak(utterance);
+        }
+      }
+
       function updateSvgProgress(percentage, color) {
         var box = document.getElementById('countdown-box');
         var svg = document.getElementById('countdown-svg');
         var bgRect = document.getElementById('bg-rect');
         var progressRect = document.getElementById('progress-rect');
-        if (!box || !svg || !bgRect || !progressRect) return; 
+        
+        if (!box || !svg || !bgRect || !progressRect) return; // 🛡️ 防呆
 
         var w = box.offsetWidth;
         var h = box.offsetHeight;
+        
         svg.setAttribute('width', w);
         svg.setAttribute('height', h);
         
@@ -694,12 +653,11 @@
         var isExamTime = false;
         var currentStartTime = null;
         var currentEndTime = null;
-        var autoSubjectName = "";
+        currentSubjectName = "";
 
-        // 清除所有課表的高亮與手動狀態樣式
         var items = document.getElementsByClassName('schedule-item');
         for (var i = 0; i < items.length; i++) {
-          items[i].classList.remove('active', 'manual-active');
+          items[i].classList.remove('active');
         }
 
         var percentage = 0;
@@ -721,7 +679,7 @@
             isExamTime = true;
             currentStartTime = startTime;
             currentEndTime = endTime;
-            autoSubjectName = scheduleData[i].subject;
+            currentSubjectName = scheduleData[i].subject;
             
             diffMs = endTime - now;
             var diffMins = Math.floor(diffMs / 60000);
@@ -733,111 +691,88 @@
             
             if (percentage > 1) percentage = 1;
             if (percentage < 0) percentage = 0;
+
+            var color = "#4caf50";
+            if (percentage > 0.5) {
+              color = "#4caf50"; 
+            } else if (percentage > 0.15) {
+              color = "#ff9800"; 
+            } else {
+              color = "#ff0000"; 
+            }
+            
+            updateSvgProgress(percentage, color);
+            var statusEl = document.getElementById('countdown-status');
+            var timerEl = document.getElementById('countdown-timer');
+            if (statusEl) statusEl.innerText = '剩下：';
+            if (timerEl) timerEl.innerText = `${diffMins}分${diffSecs}秒`;
             break;
           }
-        }
-
-        // 偵測是否換了節次，如果是，重置語音播報的旗標
-        if (isExamTime && currentExamPeriod !== activeIndex) {
-            currentExamPeriod = activeIndex;
-            hasSpokenStart = false;
-            hasSpokenEnd = false;
-        } else if (!isExamTime) {
-            currentExamPeriod = -1;
         }
 
         globalExamState.isExam = isExamTime;
         globalExamState.startTime = currentStartTime;
         globalExamState.endTime = currentEndTime;
 
-        var statusEl = document.getElementById('countdown-status');
-        var timerEl = document.getElementById('countdown-timer');
-        var subEl = document.getElementById('current-subject-label');
-        var reminderContainer = document.getElementById('reminder-text');
         var targetReminderHtml = "";
 
-        if (manualSubject !== "") {
-          currentSubjectName = manualSubject;
-          
-          if (subEl) subEl.innerText = currentSubjectName;
-          if (statusEl) statusEl.innerText = '狀態：';
-          if (timerEl) timerEl.innerText = '手動指定';
-          
-          targetReminderHtml = `手動時間調整中，已連動指定科目：【${currentSubjectName}】，可正常輸入並送出缺考人數。`;
-          
-          updateSvgProgress(0, "transparent"); 
-          
-          for (var j = 0; j < scheduleData.length; j++) {
-            if (scheduleData[j].subject === manualSubject) {
-              var hlEl = document.getElementById('schedule-item-' + j);
-              if (hlEl) hlEl.classList.add('manual-active');
-            }
-          }
+        if (highlightIndex !== -1) {
+          var hlEl = document.getElementById('schedule-item-' + highlightIndex);
+          if (hlEl) hlEl.classList.add('active');
+        }
 
-        } else if (isExamTime) {
-          // 正常考試中
-          currentSubjectName = autoSubjectName;
+        if (isExamTime) {
+          var subEl = document.getElementById('current-subject-label');
           if (subEl) subEl.innerText = currentSubjectName;
 
-          if (highlightIndex !== -1) {
-            var hlEl = document.getElementById('schedule-item-' + highlightIndex);
-            if (hlEl) hlEl.classList.add('active');
-          }
-
-          var color = "#4caf50";
-          if (percentage > 0.5) { color = "#4caf50"; } 
-          else if (percentage > 0.15) { color = "#ff9800"; } 
-          else { color = "#ff0000"; }
-          
-          updateSvgProgress(percentage, color);
-          if (statusEl) statusEl.innerText = '剩下：';
-          if (timerEl) timerEl.innerText = `${diffMins}分${diffSecs}秒`;
-
-          // --- 語音及文字動態提醒邏輯 ---
           var elapsedMs = now - currentStartTime;
           var elapsedMinutes = Math.floor(elapsedMs / 60000); 
-          var remainingMinutes = Math.floor(diffMs / 60000);
+          var elapsedSeconds = Math.floor(elapsedMs / 1000);  
+          var remainSeconds = Math.floor(diffMs / 1000);       
+          var reminderText = "";
 
-          // 考試剛開始第一分鐘內播報
-          if (elapsedMs >= 0 && elapsedMs < 60000 && !hasSpokenStart) {
-            speakText("考試開始，請先寫上班級、姓名、座號。");
-            hasSpokenStart = true;
+          if (elapsedSeconds >= 25 && elapsedSeconds <= 29 && playedSubjectAnnouncement !== activeIndex) {
+            speakText("這節課，考試科目是，" + currentSubjectName + "，請保持安靜！專心作答。");
+            playedSubjectAnnouncement = activeIndex; 
           }
 
-          // 考試剩下最後一分鐘內播報
-          if (remainingMinutes === 0 && diffMs <= 60000 && diffMs > 0 && !hasSpokenEnd) {
+          if (elapsedSeconds >= 60 && elapsedSeconds <= 64 && playedStartAnnouncement !== activeIndex) {
+            speakText("拿到考卷後，請先寫上班級、姓名、座號。");
+            playedStartAnnouncement = activeIndex; 
+          }
+
+          if (remainSeconds <= 60 && remainSeconds >= 56 && playedEndAnnouncement !== activeIndex) {
             speakText("考試即將結束，請檢查班級、姓名、座號是否已填寫。");
-            hasSpokenEnd = true;
+            playedEndAnnouncement = activeIndex;   
           }
 
           if (elapsedMinutes < 5) {
-            targetReminderHtml = "拿到考卷後，請先寫上班級、姓名、座號。";
+            reminderText = "拿到考卷後，請先寫上班級、姓名、座號。";
           } else if (elapsedMinutes >= 5 && elapsedMinutes < 10) {
-            targetReminderHtml = "如有疑問請舉手示意，等待老師處理。";
+            reminderText = "如有疑問請舉手示意，等待老師處理。";
           } else if (elapsedMinutes >= 10 && elapsedMinutes < 25) {
-            targetReminderHtml = "題目看清楚、寫完要檢查";
+            reminderText = "題目看清楚、寫完要檢查";
           } else if (elapsedMinutes >= 25 && elapsedMinutes < 35) {
-            targetReminderHtml = "作答完成，請檢查完再檢查或趴下休息，保持安靜！";
+            reminderText = "作答完成，請檢查完再檢查或趴下休息，保持安靜！";
           } else {
-            targetReminderHtml = "考試即將結束，請檢查班級、姓名、座號是否已填寫。";
+            reminderText = "考試即將結束，請檢查班級、姓名、座號是否已填寫。";
           }
+          targetReminderHtml = reminderText;
 
         } else {
-          // 非考試時間
-          currentSubjectName = "";
-          if (statusEl) statusEl.innerText = '休息：';
-          if (timerEl) timerEl.innerText = '非考試中';
-          if (subEl) subEl.innerText = '非考試時間';
-          
-          if (highlightIndex !== -1) {
-            var hlEl = document.getElementById('schedule-item-' + highlightIndex);
-            if (hlEl) hlEl.classList.add('active');
-          }
+          var statusEl = document.getElementById('countdown-status');
+          var timerEl = document.getElementById('countdown-timer');
+          var subEl = document.getElementById('current-subject-label');
 
+          if(statusEl) statusEl.innerText = '休息：';
+          if(timerEl) timerEl.innerText = '非考試中';
+          if(subEl) subEl.innerText = '非考試時間';
+          
           targetReminderHtml = '非考試時間，請安靜休息或準備下節考試。';
           updateSvgProgress(0, "#e0e0e0");
         }
 
+        var reminderContainer = document.getElementById('reminder-text');
         if (reminderContainer && reminderContainer.innerHTML !== targetReminderHtml) {
           reminderContainer.innerHTML = targetReminderHtml;
         }
@@ -859,6 +794,7 @@
 
         var w = box.offsetWidth;
         var h = box.offsetHeight;
+        
         var strokeWidth = 22.5;
         var inset = strokeWidth / 2; 
         var rectW = w - strokeWidth;
@@ -873,15 +809,13 @@
         var perimeter = 2 * (L_stW + L_stH) + 4 * L_arc; 
 
         var ratio = 0;
-        if (manualSubject === "" && globalExamState.isExam && globalExamState.startTime && globalExamState.endTime) {
+        if (globalExamState.isExam && globalExamState.startTime && globalExamState.endTime) {
           var now = getCorrectedNow();
           var total = globalExamState.endTime - globalExamState.startTime;
           var remaining = globalExamState.endTime - now;
           ratio = remaining / total;
           if (ratio > 1) ratio = 1;
           if (ratio < 0) ratio = 0;
-        } else if (manualSubject !== "") {
-           ratio = 0; 
         } else {
           var timestamp = new Date().getTime();
           ratio = (timestamp / 12000) % 1; 
@@ -971,7 +905,8 @@
           });
       }
 
-      async function sendDataToBackend(cls, subject, count, ip) {
+      // 改為使用 Fetch 更新 Firebase 資料庫，取代原 GAS 邏輯
+    async function sendDataToBackend(cls, subject, count, ip) {
         var btn = document.querySelector('.submit-btn');
         if (btn) btn.innerText = "傳送中...";
         
@@ -994,6 +929,7 @@
           for (let key in absences) {
             if (!isNaN(key)) maxIndex = Math.max(maxIndex, parseInt(key));
             let record = absences[key];
+            
             if (record && record.班級 === cls && record.日期 && record.日期.startsWith(dateOnlyStr)) {
               targetKey = key;
             }
@@ -1016,6 +952,7 @@
               ip: ip,
               日期: todayDateStr, 
               班級: cls,
+              // 【修正點】：將原本預設的 0 全部改為空字串 ""
               國語: subject === '國語' ? parseInt(count) : "",
               數學: subject === '數學' ? parseInt(count) : "",
               生活: subject === '生活' ? parseInt(count) : "",
@@ -1032,17 +969,12 @@
           }
 
           showCustomAlert("資料送出成功！");
-          
-          manualSubject = "";
-          
           if (btn) {
             btn.innerText = "送出";
             btn.disabled = false;
           }
           var countEl = document.getElementById('absence-count');
           if (countEl) countEl.value = "0";
-
-          updateClock();
 
         } catch (err) {
           showCustomAlert("發生錯誤：" + err.message);
@@ -1052,6 +984,17 @@
           }
         }
       }
+
+      // 👇👇👇 監聽使用者的第一次點擊，用來解除瀏覽器的語音封印 👇👇👇
+      document.body.addEventListener('click', function() {
+        if ('speechSynthesis' in window) {
+          // 播放一段無聲的空白語音，騙過瀏覽器取得權限
+          var unlockUtterance = new SpeechSynthesisUtterance('');
+          window.speechSynthesis.speak(unlockUtterance);
+          console.log("🔊 語音自動播放權限已解鎖！");
+        }
+      }, { once: true });
+      
     </script>
   </body>
 </html>
