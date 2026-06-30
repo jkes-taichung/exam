@@ -351,6 +351,7 @@
       var scheduleData = [];
       var currentSubjectName = "";
       var timeOffset = 0; 
+      var manualSubject = ""; // 🛡️ 安全修正：補上原本缺失的全域變數宣告，避免送出時出錯
 
       var playedStartAnnouncement = -1;
       var playedEndAnnouncement = -1;
@@ -363,10 +364,8 @@
       };
       var bearAnimationId = null;
 
-      // 當頁面載入時，改為透過 Fetch 請求 Firebase 資料
-     // 🆕 請確保在程式碼最上方的全域變數區有這兩行網址
-       const USER_DB_URL = "https://user-a354e-default-rtdb.asia-southeast1.firebasedatabase.app";
-      // var urlParams = ... (保留你原本其他的變數)
+      // 🆕 請確保在程式碼最上方的全域變數區有這兩行網址
+      const USER_DB_URL = "https://user-a354e-default-rtdb.asia-southeast1.firebasedatabase.app";
 
       // 當頁面載入時，改為透過 Fetch 請求 Firebase 資料
       window.onload = async function() {
@@ -375,30 +374,42 @@
           initPage(data);
         } catch (error) {
           console.error("載入初始資料失敗：", error);
-          // 強化錯誤顯示：把真正的錯誤原因印在畫面上，方便抓蟲
           document.getElementById('clock').innerText = "系統異常";
           document.getElementById('schedule-container').innerHTML = `<div style="padding:22px; color:red; font-size:20px;">資料載入失敗！<br><br>錯誤原因：${error.message}<br><br>請檢查 Firebase 資料庫是否有空白或格式錯誤。</div>`;
         }
       };
 
+      // 🛡️ 時間格式化裝甲：確保 "8:5" 變 "08:05"，讓 HTML5 time input 能正確讀取與顯示
+      function formatTimeStr(timeStr) {
+        if (!timeStr) return "00:00";
+        var parts = String(timeStr).split(':');
+        if (parts.length < 2) return "00:00";
+        var hh = parts[0].padStart(2, '0');
+        var mm = parts[1].padStart(2, '0');
+        return hh + ":" + mm;
+      }
+
+      // 當老師在畫面上微調時間時，即時更新全域變數並重新計算計時器
+      function updateItemTime(index, field, newValue) {
+        if (scheduleData[index]) {
+          scheduleData[index][field] = newValue;
+          updateClock(); // 立即重新觸發時鐘計算，讓倒數與紅底狀態無縫切換
+        }
+      }
+
       // 從 Firebase 獲取班級與課表資料
       async function fetchInitialData(gradeStr) {
-        // 🎯 1. 抓取班級清單 (修改點：改從 USER_DB_URL 抓取，路徑為 class.json)
         let clsRes = await fetch(`${USER_DB_URL}/class.json`);
         let classData = await clsRes.json();
         
-        // ⚠️ 修改點：因為你的班級名稱變成了 JSON 的 Key，所以改用 Object.keys()
         let classes = classData ? Object.values(classData) : [];
 
-        // 2. 抓取時間/課表設定 (維持原本邏輯，從 FIREBASE_DB_URL 抓取)
         let timeRes = await fetch(`${FIREBASE_DB_URL}/exam/時間.json`);
         let timeData = await timeRes.json();
 
         let scheduleObj = null;
         if (timeData) {
-          // 找到對應目前年級的設定 (grade: 101 等)
           for (let key in timeData) {
-            // 🛡️ 防當機裝甲：加上 timeData[key] != null 的判斷
             if (timeData[key] && String(timeData[key].grade) === String(gradeStr)) {
               scheduleObj = timeData[key];
               break;
@@ -417,42 +428,37 @@
             if (startStr && subjStr) {
               scheduleList.push({
                 period: i,
-                start: String(startStr), // 🛡️ 防當機：強制轉字串，避免 Firebase 把 "08:00" 變數字
-                end: String(endStr),
+                start: formatTimeStr(startStr), // 🛡️ 透過裝甲標準化時間格式 (如: 08:00)
+                end: formatTimeStr(endStr),     // 🛡️ 透過裝甲標準化時間格式
                 subject: subjStr,
                 hasMusic: !!musicData,
-                music: musicData || ""      // 🎯 維持您原本的 music 設定
+                music: musicData || ""      
               });
             }
           }
         }
         return { classes: classes, schedule: scheduleList };
       }
+
       function initPage(data) {
         var select = document.getElementById('class-select');
         
-        // 🎯 1. 建立阿拉伯數字與中文年級的對照表
         const gradeMap = {
           '1': '一', '2': '二', '3': '三', '4': '四',
           '5': '五', '6': '六', '7': '七', '8': '八', '9': '九'
         };
 
-        // 🎯 2. 取得目前年級的第一個數字 (例如："401" -> "4", "102" -> "1")
         var firstDigit = String(currentGrade).charAt(0);
-        var targetChinesePrefix = gradeMap[firstDigit]; // 對應出 "四" 或 "一"
+        var targetChinesePrefix = gradeMap[firstDigit]; 
 
         data.classes.forEach(function(cls) {
-          if (cls) { // 🛡️ 防當機：濾掉 Firebase 的空班級
-            
-            // 🎯 3. 檢查班級的第一個字是否符合對應的中文年級 (例如："四年1班" 是否以 "四" 開頭)
-            // 🛡️ 安全機制：如果網址沒帶參數或對照失敗，則預設顯示所有班級，避免選單全空
+          if (cls) { 
             if (!targetChinesePrefix || cls.startsWith(targetChinesePrefix)) {
               var opt = document.createElement('option');
               opt.value = cls;
               opt.innerHTML = cls;
               select.appendChild(opt);
             }
-            
           }
         });
 
@@ -464,25 +470,18 @@
         setInterval(function() { syncServerTime(false); }, 19 * 60 * 1000);
       }
 
-      // 改用第三方 API (WorldTimeAPI) 來抓取標準時間
-// 終極防護：讀取自己網頁 (GitHub Pages) 的伺服器時間標頭
       async function syncServerTime(isInitialLoad) {
         try {
-          // 對目前的網頁發送 HEAD 請求，不下載內容，只抓標頭
-          // cache: 'no-store' 確保每次都向伺服器要最新時間，不使用瀏覽器暫存
           let response = await fetch(window.location.href, { 
             method: 'HEAD', 
             cache: 'no-store' 
           });
           
-          // 抓取伺服器回傳的 Date 標頭 (標準 GMT 時間)
           let dateHeader = response.headers.get('Date');
           
           if (dateHeader) {
             let serverTimestamp = new Date(dateHeader).getTime();
             let localTimestamp = new Date().getTime();
-            
-            // 計算誤差值
             timeOffset = serverTimestamp - localTimestamp; 
           } else {
             throw new Error("伺服器未回傳 Date 標頭");
@@ -492,7 +491,6 @@
           timeOffset = 0;
         }
 
-        // 第一次載入時，啟動時鐘與動畫
         if (isInitialLoad) {
           updateClock(); 
           setInterval(updateClock, 1000); 
@@ -500,11 +498,12 @@
           startBearAnimationLoop();
         }
       }
+
+      // 渲染課表清單 (此處已將原本寫死的時間文字，修改為可微調的 input 控制項)
       function renderSchedule() {
         var container = document.getElementById('schedule-container');
         container.innerHTML = '';
         
-        // 🛡️ 防當機：如果課表沒抓到，顯示提示而不是空白
         if (scheduleData.length === 0) {
             container.innerHTML = '<div style="padding:15px; color:#666;">無此年級的課表資料。</div>';
             return;
@@ -514,6 +513,8 @@
           var div = document.createElement('div');
           div.className = 'schedule-item';
           div.id = 'schedule-item-' + index;
+          // 為了呈現平滑過渡，加上基本的 transition 樣式
+          div.style.transition = "background-color 0.5s ease, border-color 0.5s ease";
           
           var hasSubject = item.subject && typeof item.subject === 'string' && item.subject.trim() !== "" && item.subject.indexOf("無") === -1 && item.subject.indexOf("休") === -1;
           
@@ -526,11 +527,22 @@
             }
           }
 
+          // 透過精美的內聯樣式提供時間微調輸入格，不破壞原本的排版排頁
+          var timeInputHtml = `
+            <input type="time" value="${item.start}" 
+                   style="font-size:18px; padding:2px 4px; border:1px solid #ccc; border-radius:4px; text-align:center; width:95px;" 
+                   onchange="updateItemTime(${index}, 'start', this.value)">
+            <span style="margin:0 4px;">~</span>
+            <input type="time" value="${item.end}" 
+                   style="font-size:18px; padding:2px 4px; border:1px solid #ccc; border-radius:4px; text-align:center; width:95px;" 
+                   onchange="updateItemTime(${index}, 'end', this.value)">
+          `;
+
           if (hasSubject) {
             div.innerHTML = `
               <div class="schedule-text-container">
                 <span class="sub-name">${item.subject}</span>
-                <span class="sub-time">${item.start}~${item.end}</span>
+                <span class="sub-time">${timeInputHtml}</span>
               </div>
               <span class="sub-audio-zone" id="audio-zone-${item.period}">${audioZoneContent}</span>
             `;
@@ -547,8 +559,7 @@
         });
       }
 
-
-  function triggerBackgroundAudioLoad() {
+      function triggerBackgroundAudioLoad() {
         scheduleData.forEach(function(item) {
           if (item.subject && typeof item.subject === 'string' && item.subject.indexOf('英文') !== -1 && item.hasMusic) {
             var audioUrl = item.music || "";
@@ -561,9 +572,8 @@
               return; 
             }
 
-            // 直接將 Firebase 抓到的網址作為音檔來源
             zone.innerHTML = `
-           <audio controls controlsList="nodownload" preload="metadata" crossorigin="anonymous">
+             <audio controls controlsList="nodownload" preload="metadata" crossorigin="anonymous">
                 <source src="${audioUrl}" type="audio/mpeg">
                 您的瀏覽器不支援音訊播放。
               </audio>
@@ -578,7 +588,6 @@
       }
 
       function parseTime(timeStr) {
-        // 🛡️ 防當機：確保時間字串存在且可切割
         if (!timeStr || typeof timeStr.split !== 'function') return new Date();
         var parts = timeStr.split(':');
         var now = getCorrectedNow(); 
@@ -602,7 +611,7 @@
         var bgRect = document.getElementById('bg-rect');
         var progressRect = document.getElementById('progress-rect');
         
-        if (!box || !svg || !bgRect || !progressRect) return; // 🛡️ 防呆
+        if (!box || !svg || !bgRect || !progressRect) return; 
 
         var w = box.offsetWidth;
         var h = box.offsetHeight;
@@ -655,9 +664,12 @@
         var currentEndTime = null;
         currentSubjectName = "";
 
+        // 重設所有項目的樣式 (包含 active 與考前紅底的樣式清除)
         var items = document.getElementsByClassName('schedule-item');
         for (var i = 0; i < items.length; i++) {
           items[i].classList.remove('active');
+          items[i].style.backgroundColor = ""; // 清除動態變色
+          items[i].style.borderColor = "";
         }
 
         var percentage = 0;
@@ -668,7 +680,16 @@
 
           var startTime = parseTime(scheduleData[i].start);
           var endTime = parseTime(scheduleData[i].end);
-          var preStartTime = new Date(startTime.getTime() - 5 * 60 * 1000); 
+          var preStartTime = new Date(startTime.getTime() - 5 * 60 * 1000); // 考前 5 分鐘時間點
+
+          // 🎯 功能新增：檢查現在是否處於「考試前五分鐘」區間（還未正式開考）
+          if (now >= preStartTime && now < startTime) {
+            var preEl = document.getElementById('schedule-item-' + i);
+            if (preEl) {
+              preEl.style.backgroundColor = "#ffcccc"; // 網底變紅色
+              preEl.style.borderColor = "#ff3b30";     // 加上紅色外框線加強視覺提示
+            }
+          }
 
           if (now >= preStartTime && now <= endTime) {
             highlightIndex = i;
@@ -716,9 +737,17 @@
 
         var targetReminderHtml = "";
 
+        // 如果正式開考（或在開考前5分鐘高亮區間），套用原本的 active 樣式
         if (highlightIndex !== -1) {
           var hlEl = document.getElementById('schedule-item-' + highlightIndex);
-          if (hlEl) hlEl.classList.add('active');
+          if (hlEl) {
+            hlEl.classList.add('active');
+            // 如果已經正式開考，確保蓋掉剛才考前5分鐘的紅底，換回系統原本的 active 底色
+            if (now >= parseTime(scheduleData[highlightIndex].start)) {
+              hlEl.style.backgroundColor = ""; 
+              hlEl.style.borderColor = "";
+            }
+          }
         }
 
         if (isExamTime) {
@@ -731,6 +760,7 @@
           var remainSeconds = Math.floor(diffMs / 1000);       
           var reminderText = "";
 
+          // 🔊 原本的語音廣播功能（完全維持原邏輯判定）
           if (elapsedSeconds >= 25 && elapsedSeconds <= 29 && playedSubjectAnnouncement !== activeIndex) {
             speakText("這節課，考試科目是，" + currentSubjectName + "，請保持安靜！專心作答。");
             playedSubjectAnnouncement = activeIndex; 
@@ -746,6 +776,7 @@
             playedEndAnnouncement = activeIndex;   
           }
 
+          // 📝 原本的跑馬燈字幕提醒功能（完全維持原邏輯判定）
           if (elapsedMinutes < 5) {
             reminderText = "拿到考卷後，請先寫上班級、姓名、座號。";
           } else if (elapsedMinutes >= 5 && elapsedMinutes < 10) {
@@ -905,21 +936,18 @@
           });
       }
 
-      // 改為使用 Fetch 更新 Firebase 資料庫，取代原 GAS 邏輯
-   async function sendDataToBackend(cls, subject, count, ip) {
+      async function sendDataToBackend(cls, subject, count, ip) {
         var btn = document.querySelector('.submit-btn');
         if (btn) btn.innerText = "傳送中...";
         
         try {
           let localNow = getCorrectedNow(); 
           
-          // 格式化當前時間為：2026/6/23 上午 10:30:14
           let todayDateStr = localNow.toLocaleString('zh-TW', { 
             timeZone: 'Asia/Taipei', 
             hour12: true 
           }).replace('上午', '上午 ').replace('下午', '下午 ');
 
-          // 1. 先讀取目前「缺考」節點下的所有資料，目的是計算下一個流水號 (Max Index)
           let res = await fetch(`${FIREBASE_DB_URL}/exam/缺考.json`);
           let absences = await res.json() || {};
 
@@ -931,16 +959,14 @@
           }
           let newIndex = maxIndex + 1;
 
-          // 2. 建立全新的單筆結構：將「科目」與「缺考人數」抽成獨立欄位
           let newData = {
             ip: ip,
             日期: todayDateStr, 
             班級: cls,
-            科目: subject,            // 新增：直接記錄本次科目名稱
-            缺考人數: parseInt(count)  // 新增：直接記錄人數
+            科目: subject,           
+            缺考人數: parseInt(count)  
           };
           
-          // 3. 直接用 PUT 寫入全新的流水號節點中
           await fetch(`${FIREBASE_DB_URL}/exam/缺考/${newIndex}.json`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
@@ -949,8 +975,7 @@
 
           showCustomAlert("資料送出成功！");
           
-          // 成功後重置狀態
-          manualSubject = "";
+          manualSubject = ""; // 🛡️ 這裡重置便不會再噴 ReferenceError
           if (btn) {
             btn.innerText = "送出";
             btn.disabled = false;
@@ -969,16 +994,14 @@
         }
       }
 
-      // 👇👇👇 監聽使用者的第一次點擊，用來解除瀏覽器的語音封印 👇👇👇
       document.body.addEventListener('click', function() {
         if ('speechSynthesis' in window) {
-          // 播放一段無聲的空白語音，騙過瀏覽器取得權限
           var unlockUtterance = new SpeechSynthesisUtterance('');
           window.speechSynthesis.speak(unlockUtterance);
           console.log("🔊 語音自動播放權限已解鎖！");
         }
       }, { once: true });
       
-    </script>
+</script>
   </body>
 </html>
