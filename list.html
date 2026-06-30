@@ -523,6 +523,7 @@
   }
 
   // 🛠️ 核心優化：缺考回報統計表格渲染（每筆獨立、排除重複、限15天）
+  // 缺考回報統計表格渲染 (已修正：重複回報時，直接以最新資料覆蓋，不加總)
   function buildAbsenceTablesWithPreload(classesNode, absenceNode) {
     const bodies = {
       1: document.getElementById('absenceBody1'),
@@ -558,83 +559,52 @@
       return (!isNaN(num) && num > 0) ? num : 0;
     };
 
-    // 💡 設定 15 天時間範圍限制
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const fifteenDaysInMs = 15 * 24 * 60 * 60 * 1000;
     const minTime = today.getTime() - fifteenDaysInMs;
     const maxTime = today.getTime() + fifteenDaysInMs;
 
-    // 💡 精準處理「2026/6/23 上午 10:30:14」格式的時間解析函式
-    const parseCustomDate = (dateStr) => {
-      if (!dateStr) return 0;
-      let str = String(dateStr);
-      let isPM = str.includes('下午');
-      let isAM = str.includes('上午');
-      
-      let parts = str.match(/\d+/g);
-      if (parts && parts.length >= 6) {
-        let h = parseInt(parts[3], 10);
-        if (isPM && h < 12) h += 12; // 下午 1 點變 13 點
-        if (isAM && h === 12) h = 0;   // 上午 12 點變 0 點
-        return new Date(parts[0], parts[1] - 1, parts[2], h, parts[4], parts[5]).getTime();
-      }
-      let d = new Date(str.replace('上午', 'AM').replace('下午', 'PM'));
-      return isNaN(d.getTime()) ? 0 : d.getTime();
-    };
-
-    const latestTimeMap = {}; 
+    const absenceMap = {};
     const absenceList = Array.isArray(absenceNode) ? absenceNode : Object.values(absenceNode);
-    const subjectsList = ['國語', '數學', '英文', '自然', '社會', '生活'];
-
-    // 【步驟一】過濾 15 天內，並找出「各班級、各科目」最新的有效時間戳記
-    absenceList.forEach(rec => {
-      if (!rec || !rec.班級) return;
-      const className = String(rec.班級).trim();
-      const recDateStr = rec.日期 || rec.時間戳記 || rec.timestamp;
-      const recTime = parseCustomDate(recDateStr);
-
-      if (recTime < minTime || recTime > maxTime) return; // 剔除 15 天以外的舊資料
-
-      subjectsList.forEach(sub => {
-        if (rec[sub] !== undefined && rec[sub] !== null && rec[sub] !== "") {
-          const key = `${className}_${sub}`;
-          if (!latestTimeMap[key] || recTime > latestTimeMap[key]) {
-            latestTimeMap[key] = recTime; // 鎖定最新時間點
-          }
-        }
-      });
+    
+    // 💡 修正點 1：先將所有資料依據時間「由舊到新」排序
+    // 這樣後面跑 forEach 的時候，最新提交的資料才會在最後面進行「覆蓋」
+    absenceList.sort((a, b) => {
+      const timeA = new Date(a.日期 || a.時間戳記 || a.timestamp || 0).getTime();
+      const timeB = new Date(b.日期 || b.時間戳記 || b.timestamp || 0).getTime();
+      return timeA - timeB;
     });
 
-    // 【步驟二】重新篩選，只抽取出「符合最新時間」的獨立紀錄區塊
-    const classRecordsMap = {}; 
     absenceList.forEach(rec => {
-      if (!rec || !rec.班級) return;
-      const className = String(rec.班級).trim();
-      const recDateStr = rec.日期 || rec.時間戳記 || rec.timestamp;
-      const recTime = parseCustomDate(recDateStr);
-
-      if (recTime < minTime || recTime > maxTime) return;
-
-      let hasValidSubject = false;
-      const cleanRecord = { 班級: className, 日期: recDateStr };
-      
-      subjectsList.forEach(sub => {
-        if (rec[sub] !== undefined && rec[sub] !== null && rec[sub] !== "") {
-          const key = `${className}_${sub}`;
-          // 如果這筆資料的這個科目，正是資料庫中最新的一筆，才允許寫入
-          if (latestTimeMap[key] === recTime) {
-            cleanRecord[sub] = rec[sub];
-            hasValidSubject = true;
+      if (rec && rec.班級) {
+        let recDateStr = rec.日期 || rec.時間戳記 || rec.timestamp;
+        let isWithinRange = true;
+        if (recDateStr) {
+          let recDate = new Date(recDateStr);
+          if (!isNaN(recDate.getTime())) {
+            let recTime = recDate.getTime();
+            if (recTime < minTime || recTime > maxTime) isWithinRange = false;
           }
         }
-      });
-
-      if (hasValidSubject) {
-        if (!classRecordsMap[className]) {
-          classRecordsMap[className] = [];
+        
+        if (isWithinRange) {
+          const className = String(rec.班級).trim();
+          
+          if (!absenceMap[className]) {
+            // 如果這個班級第一次出現，直接整筆寫入
+            absenceMap[className] = { ...rec };
+          } else {
+            // 💡 修正點 2：同班級有第二筆以上資料時，進行「最新考科資料覆蓋」
+            const subjects = ['國語', '數學', '生活', '自然', '英文', '社會'];
+            subjects.forEach(sub => {
+              // 只要最新的這筆回報有填寫該科目（不是空字串/null），就直接用新數據取代舊數據
+              if (rec[sub] !== undefined && rec[sub] !== null && rec[sub] !== "") {
+                absenceMap[className][sub] = rec[sub]; // 使用 = 直接覆蓋，不加總
+              }
+            });
+          }
         }
-        classRecordsMap[className].push(cleanRecord); // 以原始獨立姿態存放
       }
     });
 
@@ -645,7 +615,6 @@
       Object.keys(classesNode).forEach(k => { if (k !== '網址') classList.push(classesNode[k]); });
     }
 
-    // 【步驟三】走訪預載班級，將各資料獨立渲染（保持獨立多列展示）
     classList.forEach(className => {
       if (!className || typeof className !== 'string') return;
       className = className.trim();
@@ -660,47 +629,28 @@
 
       if (gradeNum >= 1 && gradeNum <= 6) {
         gradeCounts[gradeNum]++;
-        const records = classRecordsMap[className] || [];
+        const record = absenceMap[className] || {};
 
-        if (records.length === 0) {
-          // 沒有任何 15 天內填寫紀錄的班級，單獨噴出一列「未填」
-          const zh = formatAbsence(undefined);
-          const math = formatAbsence(undefined);
-          const nature = formatAbsence(undefined);
-          const eng = formatAbsence(undefined);
-          const society = formatAbsence(undefined);
-          const life = formatAbsence(undefined);
+        if (getNumValue(record.國語) > 0) subjectAlerts[gradeNum].zh = true;
+        if (getNumValue(record.數學) > 0) subjectAlerts[gradeNum].math = true;
+        if (gradeNum <= 2 && getNumValue(record.生活) > 0) subjectAlerts[gradeNum].life = true;
+        if (gradeNum >= 3) {
+          if (getNumValue(record.自然) > 0) subjectAlerts[gradeNum].nature = true;
+          if (getNumValue(record.英文) > 0) subjectAlerts[gradeNum].eng = true;
+          if (getNumValue(record.社會) > 0) subjectAlerts[gradeNum].society = true;
+        }
 
-          if (gradeNum === 1 || gradeNum === 2) {
-            htmls[gradeNum] += `<tr><td style="font-weight: 600; color: #1e293b;">${className}</td><td>${zh}</td><td>${life}</td><td>${math}</td></tr>`;
-          } else {
-            htmls[gradeNum] += `<tr><td style="font-weight: 600; color: #1e293b;">${className}</td><td>${zh}</td><td>${nature}</td><td>${eng}</td><td>${math}</td><td>${society}</td></tr>`;
-          }
+        const zh = formatAbsence(record.國語);
+        const math = formatAbsence(record.數學);
+        const nature = formatAbsence(record.自然);
+        const eng = formatAbsence(record.英文);
+        const society = formatAbsence(record.社會);
+        const life = formatAbsence(record.生活);
+
+        if (gradeNum === 1 || gradeNum === 2) {
+          htmls[gradeNum] += `<tr><td style="font-weight: 600; color: #1e293b;">${className}</td><td>${zh}</td><td>${life}</td><td><td>${math}</td></tr>`;
         } else {
-          // 有多筆最新學科紀錄，則完全獨立拆開，有多少獨立紀錄就畫多少列，絕不合併
-          records.forEach(record => {
-            if (getNumValue(record.國語) > 0) subjectAlerts[gradeNum].zh = true;
-            if (getNumValue(record.數學) > 0) subjectAlerts[gradeNum].math = true;
-            if (gradeNum <= 2 && getNumValue(record.生活) > 0) subjectAlerts[gradeNum].life = true;
-            if (gradeNum >= 3) {
-              if (getNumValue(record.自然) > 0) subjectAlerts[gradeNum].nature = true;
-              if (getNumValue(record.英文) > 0) subjectAlerts[gradeNum].eng = true;
-              if (getNumValue(record.社會) > 0) subjectAlerts[gradeNum].society = true;
-            }
-
-            const zh = formatAbsence(record.國語);
-            const math = formatAbsence(record.數學);
-            const nature = formatAbsence(record.自然);
-            const eng = formatAbsence(record.英文);
-            const society = formatAbsence(record.社會);
-            const life = formatAbsence(record.生活);
-
-            if (gradeNum === 1 || gradeNum === 2) {
-              htmls[gradeNum] += `<tr><td style="font-weight: 600; color: #1e293b;">${className}</td><td>${zh}</td><td>${life}</td><td>${math}</td></tr>`;
-            } else {
-              htmls[gradeNum] += `<tr><td style="font-weight: 600; color: #1e293b;">${className}</td><td>${zh}</td><td>${nature}</td><td>${eng}</td><td>${math}</td><td>${society}</td></tr>`;
-            }
-          });
+          htmls[gradeNum] += `<tr><td style="font-weight: 600; color: #1e293b;">${className}</td><td>${zh}</td><td>${nature}</td><td>${eng}</td><td>${math}</td><td>${society}</td></tr>`;
         }
       }
     });
