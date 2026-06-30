@@ -397,24 +397,19 @@
   };
 
   // 視窗控制
-  // 新增一個全域變數，用來暫存需要跳轉的網址
   let alertRedirectUrl = ''; 
 
   function customAlert(message, redirectUrl = '') {
     document.getElementById('customAlertMessage').innerText = message;
     document.getElementById('customAlertModal').classList.remove('hidden');
-    
-    // 將傳入的網址存入全域變數中（若沒傳傳入則為空字串）
     alertRedirectUrl = redirectUrl; 
   }
 
   function closeCustomAlert() { 
     document.getElementById('customAlertModal').classList.add('hidden'); 
-    
-    // 💡 按下確定關閉視窗後，如果發現有暫存網址，就開啟新分頁
     if (alertRedirectUrl) {
       window.open(alertRedirectUrl, '_blank');
-      alertRedirectUrl = ''; // 開啟後隨手清空，避免影響其他普通的錯誤彈窗
+      alertRedirectUrl = ''; 
     }
   }
 
@@ -424,39 +419,34 @@
   // 強制下載音檔的輔助函式
   async function downloadAudioFile(url, fileName) {
     try {
-      // 提醒：使用 fetch 可以將檔案轉換為 Blob，強制瀏覽器「下載」而不是直接在分頁中「播放」
       const response = await fetch(url);
       if (!response.ok) throw new Error('網路回應錯誤');
       const blob = await response.blob();
       
-      // 嘗試從網址抓取副檔名，如果抓不到就預設為 mp3
       let ext = url.split('.').pop().split('?')[0];
       if (!['mp3', 'wav', 'm4a', 'wma', 'ogg'].includes(ext.toLowerCase())) {
         ext = 'mp3';
       }
 
-      // 建立暫時的 Blob URL 與隱藏的 <a> 標籤來觸發下載
       const blobUrl = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.style.display = 'none';
       a.href = blobUrl;
-      a.download = `${fileName}.${ext}`; // 設定下載的預設檔名
+      a.download = `${fileName}.${ext}`; 
       
       document.body.appendChild(a);
       a.click();
       
-      // 下載完成後清理記憶體
       window.URL.revokeObjectURL(blobUrl);
       document.body.removeChild(a);
       
     } catch (error) {
       console.error('Blob 下載失敗，改用新分頁開啟:', error);
-      // 💡 備用方案：如果 Supabase 的 CORS (跨域) 設定阻擋了 fetch，就直接開新分頁讓老師按右鍵下載
       window.open(url, '_blank');
     }
   }
 
-  // 雲端轉換連結修正（保留給相容格式）
+  // 雲端轉換連結修正
   function convertToDirectDownloadUrl(url) {
     if (!url) return "";
     if (url.indexOf("uc?export=download") > -1) return url; 
@@ -469,7 +459,6 @@
     startRealtimeSync();
   }
 
-  // 全域變數用來儲存從 user 資料庫拉取的班級清單
   let globalClassList = [];
 
   // Firebase 即時同步偵聽
@@ -485,25 +474,21 @@
     }
 
     try {
-      // ✅ 步驟 A：先從 userDb 拉取 class 節點資料
       const classSnap = await userDb.ref('class').once('value');
       let classesObj = classSnap.val() || [];
       globalClassList = [];
       
-      // 💡 修正 1：更強健的班級陣列解析 (應對 Google Sheets 轉出可能是物件陣列的情況)
       let rawValues = Array.isArray(classesObj) ? classesObj : Object.values(classesObj);
       rawValues.forEach(item => {
         if (!item) return;
         if (typeof item === 'string') {
           globalClassList.push(item);
         } else if (typeof item === 'object') {
-          // 如果資料庫匯出的是 { "班級": "一年一班" } 的物件形式
           let val = item['班級'] || item['class'] || Object.values(item)[0];
           if (typeof val === 'string') globalClassList.push(val);
         }
       });
 
-      // ✅ 步驟 B：監聽原本 examDb 的資料
       database.ref('exam').off('value'); 
       database.ref('exam').on('value', snapshot => {
         const examData = snapshot.val() || {};
@@ -513,8 +498,6 @@
         const classUrls = "https://jkes-taichung.github.io/exam/index.html";
 
         renderGradeTablesFromFirebase(timeNode, classUrls);
-        
-        // 這裡把原本的 classesNode 替換成剛剛抓下來的 globalClassList
         buildAbsenceTablesWithPreload(globalClassList, absenceNode);
 
         if (btn && icon && text) {
@@ -539,7 +522,7 @@
     }
   }
 
-  // 缺考回報統計表格渲染
+  // 🛠️ 核心優化：缺考回報統計表格渲染（每筆獨立、排除重複、限15天）
   function buildAbsenceTablesWithPreload(classesNode, absenceNode) {
     const bodies = {
       1: document.getElementById('absenceBody1'),
@@ -575,27 +558,83 @@
       return (!isNaN(num) && num > 0) ? num : 0;
     };
 
+    // 💡 設定 15 天時間範圍限制
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const fifteenDaysInMs = 15 * 24 * 60 * 60 * 1000;
     const minTime = today.getTime() - fifteenDaysInMs;
     const maxTime = today.getTime() + fifteenDaysInMs;
 
-    const absenceMap = {};
+    // 💡 精準處理「2026/6/23 上午 10:30:14」格式的時間解析函式
+    const parseCustomDate = (dateStr) => {
+      if (!dateStr) return 0;
+      let str = String(dateStr);
+      let isPM = str.includes('下午');
+      let isAM = str.includes('上午');
+      
+      let parts = str.match(/\d+/g);
+      if (parts && parts.length >= 6) {
+        let h = parseInt(parts[3], 10);
+        if (isPM && h < 12) h += 12; // 下午 1 點變 13 點
+        if (isAM && h === 12) h = 0;   // 上午 12 點變 0 點
+        return new Date(parts[0], parts[1] - 1, parts[2], h, parts[4], parts[5]).getTime();
+      }
+      let d = new Date(str.replace('上午', 'AM').replace('下午', 'PM'));
+      return isNaN(d.getTime()) ? 0 : d.getTime();
+    };
+
+    const latestTimeMap = {}; 
     const absenceList = Array.isArray(absenceNode) ? absenceNode : Object.values(absenceNode);
-    
+    const subjectsList = ['國語', '數學', '英文', '自然', '社會', '生活'];
+
+    // 【步驟一】過濾 15 天內，並找出「各班級、各科目」最新的有效時間戳記
     absenceList.forEach(rec => {
-      if (rec && rec.班級) {
-        let recDateStr = rec.日期 || rec.時間戳記 || rec.timestamp;
-        let isWithinRange = true;
-        if (recDateStr) {
-          let recDate = new Date(recDateStr);
-          if (!isNaN(recDate.getTime())) {
-            let recTime = recDate.getTime();
-            if (recTime < minTime || recTime > maxTime) isWithinRange = false;
+      if (!rec || !rec.班級) return;
+      const className = String(rec.班級).trim();
+      const recDateStr = rec.日期 || rec.時間戳記 || rec.timestamp;
+      const recTime = parseCustomDate(recDateStr);
+
+      if (recTime < minTime || recTime > maxTime) return; // 剔除 15 天以外的舊資料
+
+      subjectsList.forEach(sub => {
+        if (rec[sub] !== undefined && rec[sub] !== null && rec[sub] !== "") {
+          const key = `${className}_${sub}`;
+          if (!latestTimeMap[key] || recTime > latestTimeMap[key]) {
+            latestTimeMap[key] = recTime; // 鎖定最新時間點
           }
         }
-        if (isWithinRange) absenceMap[String(rec.班級).trim()] = rec;
+      });
+    });
+
+    // 【步驟二】重新篩選，只抽取出「符合最新時間」的獨立紀錄區塊
+    const classRecordsMap = {}; 
+    absenceList.forEach(rec => {
+      if (!rec || !rec.班級) return;
+      const className = String(rec.班級).trim();
+      const recDateStr = rec.日期 || rec.時間戳記 || rec.timestamp;
+      const recTime = parseCustomDate(recDateStr);
+
+      if (recTime < minTime || recTime > maxTime) return;
+
+      let hasValidSubject = false;
+      const cleanRecord = { 班級: className, 日期: recDateStr };
+      
+      subjectsList.forEach(sub => {
+        if (rec[sub] !== undefined && rec[sub] !== null && rec[sub] !== "") {
+          const key = `${className}_${sub}`;
+          // 如果這筆資料的這個科目，正是資料庫中最新的一筆，才允許寫入
+          if (latestTimeMap[key] === recTime) {
+            cleanRecord[sub] = rec[sub];
+            hasValidSubject = true;
+          }
+        }
+      });
+
+      if (hasValidSubject) {
+        if (!classRecordsMap[className]) {
+          classRecordsMap[className] = [];
+        }
+        classRecordsMap[className].push(cleanRecord); // 以原始獨立姿態存放
       }
     });
 
@@ -606,6 +645,7 @@
       Object.keys(classesNode).forEach(k => { if (k !== '網址') classList.push(classesNode[k]); });
     }
 
+    // 【步驟三】走訪預載班級，將各資料獨立渲染（保持獨立多列展示）
     classList.forEach(className => {
       if (!className || typeof className !== 'string') return;
       className = className.trim();
@@ -620,28 +660,47 @@
 
       if (gradeNum >= 1 && gradeNum <= 6) {
         gradeCounts[gradeNum]++;
-        const record = absenceMap[className] || {};
+        const records = classRecordsMap[className] || [];
 
-        if (getNumValue(record.國語) > 0) subjectAlerts[gradeNum].zh = true;
-        if (getNumValue(record.數學) > 0) subjectAlerts[gradeNum].math = true;
-        if (gradeNum <= 2 && getNumValue(record.生活) > 0) subjectAlerts[gradeNum].life = true;
-        if (gradeNum >= 3) {
-          if (getNumValue(record.自然) > 0) subjectAlerts[gradeNum].nature = true;
-          if (getNumValue(record.英文) > 0) subjectAlerts[gradeNum].eng = true;
-          if (getNumValue(record.社會) > 0) subjectAlerts[gradeNum].society = true;
-        }
+        if (records.length === 0) {
+          // 沒有任何 15 天內填寫紀錄的班級，單獨噴出一列「未填」
+          const zh = formatAbsence(undefined);
+          const math = formatAbsence(undefined);
+          const nature = formatAbsence(undefined);
+          const eng = formatAbsence(undefined);
+          const society = formatAbsence(undefined);
+          const life = formatAbsence(undefined);
 
-        const zh = formatAbsence(record.國語);
-        const math = formatAbsence(record.數學);
-        const nature = formatAbsence(record.自然);
-        const eng = formatAbsence(record.英文);
-        const society = formatAbsence(record.社會);
-        const life = formatAbsence(record.生活);
-
-        if (gradeNum === 1 || gradeNum === 2) {
-          htmls[gradeNum] += `<tr><td style="font-weight: 600; color: #1e293b;">${className}</td><td>${zh}</td><td>${life}</td><td>${math}</td></tr>`;
+          if (gradeNum === 1 || gradeNum === 2) {
+            htmls[gradeNum] += `<tr><td style="font-weight: 600; color: #1e293b;">${className}</td><td>${zh}</td><td>${life}</td><td>${math}</td></tr>`;
+          } else {
+            htmls[gradeNum] += `<tr><td style="font-weight: 600; color: #1e293b;">${className}</td><td>${zh}</td><td>${nature}</td><td>${eng}</td><td>${math}</td><td>${society}</td></tr>`;
+          }
         } else {
-          htmls[gradeNum] += `<tr><td style="font-weight: 600; color: #1e293b;">${className}</td><td>${zh}</td><td>${nature}</td><td>${eng}</td><td>${math}</td><td>${society}</td></tr>`;
+          // 有多筆最新學科紀錄，則完全獨立拆開，有多少獨立紀錄就畫多少列，絕不合併
+          records.forEach(record => {
+            if (getNumValue(record.國語) > 0) subjectAlerts[gradeNum].zh = true;
+            if (getNumValue(record.數學) > 0) subjectAlerts[gradeNum].math = true;
+            if (gradeNum <= 2 && getNumValue(record.生活) > 0) subjectAlerts[gradeNum].life = true;
+            if (gradeNum >= 3) {
+              if (getNumValue(record.自然) > 0) subjectAlerts[gradeNum].nature = true;
+              if (getNumValue(record.英文) > 0) subjectAlerts[gradeNum].eng = true;
+              if (getNumValue(record.社會) > 0) subjectAlerts[gradeNum].society = true;
+            }
+
+            const zh = formatAbsence(record.國語);
+            const math = formatAbsence(record.數學);
+            const nature = formatAbsence(record.自然);
+            const eng = formatAbsence(record.英文);
+            const society = formatAbsence(record.社會);
+            const life = formatAbsence(record.生活);
+
+            if (gradeNum === 1 || gradeNum === 2) {
+              htmls[gradeNum] += `<tr><td style="font-weight: 600; color: #1e293b;">${className}</td><td>${zh}</td><td>${life}</td><td>${math}</td></tr>`;
+            } else {
+              htmls[gradeNum] += `<tr><td style="font-weight: 600; color: #1e293b;">${className}</td><td>${zh}</td><td>${nature}</td><td>${eng}</td><td>${math}</td><td>${society}</td></tr>`;
+            }
+          });
         }
       }
     });
@@ -697,17 +756,16 @@
     gradeConfigs.forEach(g => {
       let downloadLinkHtml = `<span class="status-empty">-</span>`;
       
-    if (g.hasMusic) {
-      const gradeData = timeMap[g.gradeCode];
-      const rawAudioUrl = gradeData ? (gradeData["3music"] || "") : "";
-      
-      if (rawAudioUrl) {
-        // 💡 點擊時改為呼叫 downloadAudioFile 函式，並帶入該年級名稱作為下載檔名
-        downloadLinkHtml = `<a href="javascript:void(0)" onclick="downloadAudioFile('${rawAudioUrl}', '${g.name}_英聽測驗音檔')" class="action-link">下載音檔</a>`;
-      } else {
-        downloadLinkHtml = `<span class="status-empty" style="color:#ef4444; font-weight:600;">未上傳</span>`;
+      if (g.hasMusic) {
+        const gradeData = timeMap[g.gradeCode];
+        const rawAudioUrl = gradeData ? (gradeData["3music"] || "") : "";
+        
+        if (rawAudioUrl) {
+          downloadLinkHtml = `<a href="javascript:void(0)" onclick="downloadAudioFile('${rawAudioUrl}', '${g.name}_英聽測驗音檔')" class="action-link">下載音檔</a>`;
+        } else {
+          downloadLinkHtml = `<span class="status-empty" style="color:#ef4444; font-weight:600;">未上傳</span>`;
+        }
       }
-    }
 
       const separator = classUrls.includes('?') ? '&' : '?';
       const gradePrefix = g.gradeCode.charAt(0);
@@ -788,7 +846,7 @@
     }
   }
 
-async function processPageVerify() {
+  async function processPageVerify() {
     const idSuffix = document.getElementById('idSuffixInput').value.trim();
     const captchaInput = document.getElementById('captchaInput').value.trim();
     
@@ -801,7 +859,6 @@ async function processPageVerify() {
     }
     
     try {
-      // ✅ 前往 userDb 查詢 user 節點
       const userRef = userDb.ref('user');
       const snapshot = await userRef.once('value');
       
@@ -809,24 +866,15 @@ async function processPageVerify() {
       let isIdMatched = false;
       let isSubjectMatched = false;
 
-      // 遍歷 user 資料表進行比對
       snapshot.forEach(child => {
         const userData = child.val();
-        
         if (userData) {
-          // 💡 修正點：將資料庫內部的「身分證」轉成字串並去除空白進行比對
           let userIdCard = userData.身分證 ? String(userData.身分證).trim() : '';
-
-          // 先核對身分證是否正確
           if (userIdCard === idSuffix) {
             isIdMatched = true;
-            
-            // 檢查科目是否為英文或英語
             let subject = userData.科目 ? String(userData.科目).trim() : '';
             if (subject === '英文' || subject === '英語') {
               isSubjectMatched = true;
-              
-              // 💡 關鍵修正：因為現在 Key 是流水號，老師的姓名要直接從內部的「姓名」欄位取得
               foundUser = {
                 ...userData,
                 姓名: userData.姓名 ? String(userData.姓名).trim() : '未知老師'
@@ -836,7 +884,6 @@ async function processPageVerify() {
         }
       });
 
-      // 錯誤處理分流，讓老師 know 哪裡出問題
       if (!isIdMatched) {
         customAlert('查無此身分證後六碼對應的老師資料，請重新確認！');
         return;
@@ -846,16 +893,12 @@ async function processPageVerify() {
         return;
       }
 
-      // 取得資料表中的正確姓名（已從內部的屬性欄位安全提取）
       loggedInUserName = foundUser.姓名;
-
-      // 將姓名印到 HTML 上
       const welcomeSpan = document.getElementById('welcomeUserName');
       if (welcomeSpan) {
         welcomeSpan.innerText = loggedInUserName;
       }
       
-      // 切換至上傳畫面
       document.getElementById('teacherName').innerText = currentSelectedGradeName;
       document.getElementById('pageAuthStep').classList.add('hidden');
       document.getElementById('pageUploadStep').classList.remove('hidden');
@@ -865,7 +908,7 @@ async function processPageVerify() {
       customAlert("連線驗證伺服器失敗，請稍後再試！");
     }
   }
-  // 💡 新增的輔助函式：用來檢查 WAV 檔案內部的二進制編碼
+
   function checkWavIsStandardPCM(file) {
     return new Promise((resolve) => {
       const reader = new FileReader();
@@ -874,7 +917,6 @@ async function processPageVerify() {
         const view = new DataView(buffer);
 
         try {
-          // 檢查是否為標準 RIFF WAVE 格式
           const riff = String.fromCharCode(view.getUint8(0), view.getUint8(1), view.getUint8(2), view.getUint8(3));
           const wave = String.fromCharCode(view.getUint8(8), view.getUint8(9), view.getUint8(10), view.getUint8(11));
 
@@ -883,8 +925,6 @@ async function processPageVerify() {
             return;
           }
 
-          // 讀取編碼格式代碼 (位置在第 20 位元組，2 bytes)
-          // 1 代表 Linear PCM (網頁唯一支援)，3 代表 IEEE Float，2/17 代表 ADPCM (網頁無法播放)
           const formatTag = view.getUint16(20, true);
           const bitsPerSample = view.getUint16(34, true);
 
@@ -899,12 +939,10 @@ async function processPageVerify() {
           resolve({ valid: false, reason: '無法解析檔案標頭結構。' });
         }
       };
-      // 只讀取前 44 個位元組（WAV 的標頭大小）
       reader.readAsArrayBuffer(file.slice(0, 44));
     });
   }
 
-  // 主要的上傳函式（已整合上傳成功自動跳轉對應年級網頁功能）
   async function processPageUpload() {
     const fileInput = document.getElementById('audioFileInput');
     const file = fileInput.files[0];
@@ -912,13 +950,11 @@ async function processPageVerify() {
 
     const fileNameLower = file.name.toLowerCase();
     
-    // 1. 攔截絕對不能播的 WMA
     if (fileNameLower.endsWith('.wma')) {
       customAlert('❌ 瀏覽器不支援 .wma 格式網頁播放！\n請將檔案重新轉檔。');
       return;
     }
     
-    // 2. 針對一定要用的 WAV 進行深度二進制檢查
     if (fileNameLower.endsWith('.wav')) {
       const wavCheck = await checkWavIsStandardPCM(file);
       if (!wavCheck.valid) {
@@ -927,34 +963,29 @@ async function processPageVerify() {
       }
     }
 
-    // 啟動上傳動畫
     document.getElementById('uploadFormControls').classList.add('hidden');
     document.getElementById('uploadSpinner').classList.remove('hidden');
 
     try {
-      // 1. 產生不重複的安全純英數字檔名
       const fileExt = file.name.split('.').pop();
       const fileName = `${currentSelectedGradeCode}_${Date.now()}.${fileExt}`;
       
-      // 2. 使用 SDK 上傳至 Supabase 儲存桶 'exam'
       const { data: uploadData, error: uploadError } = await supabaseClient.storage
         .from('exam')
         .upload(fileName, file, {
           cacheControl: '3600',
           upsert: true,
-          contentType: file.type || 'audio/wav' // 宣告正確的網頁類型
+          contentType: file.type || 'audio/wav' 
         });
 
       if (uploadError) throw uploadError;
 
-      // 3. 取得 Supabase 的 Public 公開直連網址
       const { data: urlData } = supabaseClient.storage
         .from('exam')
         .getPublicUrl(fileName);
       
       const supabasePublicUrl = urlData.publicUrl;
 
-      // 4. 將網址與修改者資訊即時同步回寫至 Firebase DB
       const timeRef = database.ref('exam/時間');
       const snapshot = await timeRef.once('value');
       let isUpdated = false;
@@ -982,13 +1013,9 @@ async function processPageVerify() {
         });
       }
 
-      // 5. 上傳成功後的介面收尾
       document.getElementById('uploadSpinner').classList.add('hidden');
       
-      // 💡 【新增邏輯】根據當前選擇的年級代碼（如 601, 501），動態組合對應的測驗跳轉網址
       const targetExamUrl = `https://jkes-taichung.github.io/exam/index.html?grade=${currentSelectedGradeCode}`;
-      
-      // 💡 呼叫自訂彈窗，並將對應年級的網址作為第二個參數傳入
       customAlert(`🎉 ${currentSelectedGradeName} 英聽音檔上傳成功！\n\n按下「確定」後，系統將自動開啟測驗網頁，請老師聆聽一次內容是否正確？`, targetExamUrl);
       
       closeUploadModal();
