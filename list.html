@@ -566,14 +566,24 @@
     const maxTime = today.getTime() + fifteenDaysInMs;
 
     const absenceMap = {};
-    const absenceList = Array.isArray(absenceNode) ? absenceNode : Object.values(absenceNode);
+    const absenceList = [];
     
-    // 💡 修正點 1：先將所有資料依據時間「由舊到新」排序
-    // 這樣後面跑 forEach 的時候，最新提交的資料才會在最後面進行「覆蓋」
+    // 💡 優化點 1：將資料拆解並注入原始索引與 Key，避免同日期的文字排序失準
+    if (Array.isArray(absenceNode)) {
+      absenceNode.forEach((rec, idx) => { if (rec) absenceList.push({ ...rec, _sortIdx: idx }); });
+    } else if (absenceNode && typeof absenceNode === 'object') {
+      Object.keys(absenceNode).forEach((key, idx) => {
+        if (absenceNode[key]) absenceList.push({ ...absenceNode[key], _sortKey: key, _sortIdx: idx });
+      });
+    }
+    
+    // 依據時間「由舊到新」排序。若時間解析相同，則沿用 Firebase 原生 push ID 或索引順序
     absenceList.sort((a, b) => {
       const timeA = new Date(a.日期 || a.時間戳記 || a.timestamp || 0).getTime();
       const timeB = new Date(b.日期 || b.時間戳記 || b.timestamp || 0).getTime();
-      return timeA - timeB;
+      if (timeA !== timeB) return timeA - timeB;
+      if (a._sortKey && b._sortKey) return a._sortKey.localeCompare(b._sortKey);
+      return a._sortIdx - b._sortIdx;
     });
 
     absenceList.forEach(rec => {
@@ -647,8 +657,9 @@
         const society = formatAbsence(record.社會);
         const life = formatAbsence(record.生活);
 
+        // 💡 修正點 3：修正原本多包一個 <td> 的 HTML 語法 Bug，確保一、二年級表格欄位對齊不落單
         if (gradeNum === 1 || gradeNum === 2) {
-          htmls[gradeNum] += `<tr><td style="font-weight: 600; color: #1e293b;">${className}</td><td>${zh}</td><td>${life}</td><td><td>${math}</td></tr>`;
+          htmls[gradeNum] += `<tr><td style="font-weight: 600; color: #1e293b;">${className}</td><td>${zh}</td><td>${life}</td><td>${math}</td></tr>`;
         } else {
           htmls[gradeNum] += `<tr><td style="font-weight: 600; color: #1e293b;">${className}</td><td>${zh}</td><td>${nature}</td><td>${eng}</td><td>${math}</td><td>${society}</td></tr>`;
         }
