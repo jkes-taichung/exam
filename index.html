@@ -387,7 +387,7 @@
         return hh + ":" + mm;
       }
 
-      // 💡 防呆優化：當老師在文字框修改時間時，自動處理格式並重新渲染
+   // 💡 防呆優化：當老師在文字框修改時間時，自動處理格式並重新渲染
       function updateItemTime(index, field, newValue) {
         if (scheduleData[index]) {
           // 如果使用者輸入純 4 碼數字（如 0830 或 1645），自動補上冒號
@@ -396,8 +396,10 @@
           }
           
           scheduleData[index][field] = formatTimeStr(newValue);
-          renderSchedule(); // 重新渲染，讓輸入框即時顯示標準的 24 小時制（如 08:05）
-          updateClock(); 
+          
+          renderSchedule();               // 1. 重新渲染畫面 (此時音檔區會變成準備中)
+          triggerBackgroundAudioLoad();   // 2. 🛠️ 關鍵修復：重新掛載音檔播放器！
+          updateClock();                  // 3. 更新時鐘狀態
         }
       }
 
