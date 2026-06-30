@@ -428,8 +428,8 @@
             if (startStr && subjStr) {
               scheduleList.push({
                 period: i,
-                start: formatTimeStr(startStr), // 🛡️ 透過裝甲標準化時間格式 (如: 08:00)
-                end: formatTimeStr(endStr),     // 🛡️ 透過裝甲標準化時間格式
+                start: formatTimeStr(startStr), 
+                end: formatTimeStr(endStr),     
                 subject: subjStr,
                 hasMusic: !!musicData,
                 music: musicData || ""      
@@ -499,7 +499,7 @@
         }
       }
 
-      // 渲染課表清單 (此處已將原本寫死的時間文字，修改為可微調的 input 控制項)
+      // 渲染課表清單 (✨此處已將 width 放大至 145px，全面釋放時間顯示空間)
       function renderSchedule() {
         var container = document.getElementById('schedule-container');
         container.innerHTML = '';
@@ -513,7 +513,6 @@
           var div = document.createElement('div');
           div.className = 'schedule-item';
           div.id = 'schedule-item-' + index;
-          // 為了呈現平滑過渡，加上基本的 transition 樣式
           div.style.transition = "background-color 0.5s ease, border-color 0.5s ease";
           
           var hasSubject = item.subject && typeof item.subject === 'string' && item.subject.trim() !== "" && item.subject.indexOf("無") === -1 && item.subject.indexOf("休") === -1;
@@ -527,14 +526,14 @@
             }
           }
 
-          // 透過精美的內聯樣式提供時間微調輸入格，不破壞原本的排版排頁
+          // 💡 重點修正：將原本的 width:95px 改為 width:145px; 完美容納中文語系的時間控制項
           var timeInputHtml = `
             <input type="time" value="${item.start}" 
-                   style="font-size:18px; padding:2px 4px; border:1px solid #ccc; border-radius:4px; text-align:center; width:95px;" 
+                   style="font-size:18px; padding:2px 4px; border:1px solid #ccc; border-radius:4px; text-align:center; width:145px;" 
                    onchange="updateItemTime(${index}, 'start', this.value)">
-            <span style="margin:0 4px;">~</span>
+            <span style="margin:0 6px; font-weight:bold;">~</span>
             <input type="time" value="${item.end}" 
-                   style="font-size:18px; padding:2px 4px; border:1px solid #ccc; border-radius:4px; text-align:center; width:95px;" 
+                   style="font-size:18px; padding:2px 4px; border:1px solid #ccc; border-radius:4px; text-align:center; width:145px;" 
                    onchange="updateItemTime(${index}, 'end', this.value)">
           `;
 
@@ -605,6 +604,7 @@
         }
       }
 
+      // 其他 UI 渲染邏輯保持不變...
       function updateSvgProgress(percentage, color) {
         var box = document.getElementById('countdown-box');
         var svg = document.getElementById('countdown-svg');
@@ -664,11 +664,10 @@
         var currentEndTime = null;
         currentSubjectName = "";
 
-        // 重設所有項目的樣式 (包含 active 與考前紅底的樣式清除)
         var items = document.getElementsByClassName('schedule-item');
         for (var i = 0; i < items.length; i++) {
           items[i].classList.remove('active');
-          items[i].style.backgroundColor = ""; // 清除動態變色
+          items[i].style.backgroundColor = ""; 
           items[i].style.borderColor = "";
         }
 
@@ -680,14 +679,13 @@
 
           var startTime = parseTime(scheduleData[i].start);
           var endTime = parseTime(scheduleData[i].end);
-          var preStartTime = new Date(startTime.getTime() - 5 * 60 * 1000); // 考前 5 分鐘時間點
+          var preStartTime = new Date(startTime.getTime() - 5 * 60 * 1000); 
 
-          // 🎯 功能新增：檢查現在是否處於「考試前五分鐘」區間（還未正式開考）
           if (now >= preStartTime && now < startTime) {
             var preEl = document.getElementById('schedule-item-' + i);
             if (preEl) {
-              preEl.style.backgroundColor = "#ffcccc"; // 網底變紅色
-              preEl.style.borderColor = "#ff3b30";     // 加上紅色外框線加強視覺提示
+              preEl.style.backgroundColor = "#ffcccc"; 
+              preEl.style.borderColor = "#ff3b30";     
             }
           }
 
@@ -737,12 +735,10 @@
 
         var targetReminderHtml = "";
 
-        // 如果正式開考（或在開考前5分鐘高亮區間），套用原本的 active 樣式
         if (highlightIndex !== -1) {
           var hlEl = document.getElementById('schedule-item-' + highlightIndex);
           if (hlEl) {
             hlEl.classList.add('active');
-            // 如果已經正式開考，確保蓋掉剛才考前5分鐘的紅底，換回系統原本的 active 底色
             if (now >= parseTime(scheduleData[highlightIndex].start)) {
               hlEl.style.backgroundColor = ""; 
               hlEl.style.borderColor = "";
@@ -760,7 +756,6 @@
           var remainSeconds = Math.floor(diffMs / 1000);       
           var reminderText = "";
 
-          // 🔊 原本的語音廣播功能（完全維持原邏輯判定）
           if (elapsedSeconds >= 25 && elapsedSeconds <= 29 && playedSubjectAnnouncement !== activeIndex) {
             speakText("這節課，考試科目是，" + currentSubjectName + "，請保持安靜！專心作答。");
             playedSubjectAnnouncement = activeIndex; 
@@ -776,7 +771,6 @@
             playedEndAnnouncement = activeIndex;   
           }
 
-          // 📝 原本的跑馬燈字幕提醒功能（完全維持原邏輯判定）
           if (elapsedMinutes < 5) {
             reminderText = "拿到考卷後，請先寫上班級、姓名、座號。";
           } else if (elapsedMinutes >= 5 && elapsedMinutes < 10) {
@@ -975,7 +969,7 @@
 
           showCustomAlert("資料送出成功！");
           
-          manualSubject = ""; // 🛡️ 這裡重置便不會再噴 ReferenceError
+          manualSubject = ""; 
           if (btn) {
             btn.innerText = "送出";
             btn.disabled = false;
