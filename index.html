@@ -351,7 +351,7 @@
       var scheduleData = [];
       var currentSubjectName = "";
       var timeOffset = 0; 
-      var manualSubject = ""; // 🛡️ 安全修正：補上原本缺失的全域變數宣告，避免送出時出錯
+      var manualSubject = ""; 
 
       var playedStartAnnouncement = -1;
       var playedEndAnnouncement = -1;
@@ -364,10 +364,8 @@
       };
       var bearAnimationId = null;
 
-      // 🆕 請確保在程式碼最上方的全域變數區有這兩行網址
       const USER_DB_URL = "https://user-a354e-default-rtdb.asia-southeast1.firebasedatabase.app";
 
-      // 當頁面載入時，改為透過 Fetch 請求 Firebase 資料
       window.onload = async function() {
         try {
           var data = await fetchInitialData(currentGrade);
@@ -379,7 +377,7 @@
         }
       };
 
-      // 🛡️ 時間格式化裝甲：確保 "8:5" 變 "08:05"，讓 HTML5 time input 能正確讀取與顯示
+      // 時間格式化：確保 "8:5" 變 "08:05"
       function formatTimeStr(timeStr) {
         if (!timeStr) return "00:00";
         var parts = String(timeStr).split(':');
@@ -389,11 +387,17 @@
         return hh + ":" + mm;
       }
 
-      // 當老師在畫面上微調時間時，即時更新全域變數並重新計算計時器
+      // 💡 防呆優化：當老師在文字框修改時間時，自動處理格式並重新渲染
       function updateItemTime(index, field, newValue) {
         if (scheduleData[index]) {
-          scheduleData[index][field] = newValue;
-          updateClock(); // 立即重新觸發時鐘計算，讓倒數與紅底狀態無縫切換
+          // 如果使用者輸入純 4 碼數字（如 0830 或 1645），自動補上冒號
+          if (/^\d{4}$/.test(newValue)) {
+            newValue = newValue.slice(0, 2) + ':' + newValue.slice(2);
+          }
+          
+          scheduleData[index][field] = formatTimeStr(newValue);
+          renderSchedule(); // 重新渲染，讓輸入框即時顯示標準的 24 小時制（如 08:05）
+          updateClock(); 
         }
       }
 
@@ -499,7 +503,7 @@
         }
       }
 
-      // 渲染課表清單 (✨此處已將 width 放大至 145px，全面釋放時間顯示空間)
+      // 🆕 渲染課表清單 (此處已全面改為 type="text" 完美強制定製 24 小時制)
       function renderSchedule() {
         var container = document.getElementById('schedule-container');
         container.innerHTML = '';
@@ -526,14 +530,14 @@
             }
           }
 
-          // 💡 重點修正：將原本的 width:95px 改為 width:145px; 完美容納中文語系的時間控制項
+          // 💡 重點修改：將 type="time" 改為 type="text"，加入最大長度限制與置中，寬度精簡為 75px
           var timeInputHtml = `
-            <input type="time" value="${item.start}" 
-                   style="font-size:18px; padding:2px 4px; border:1px solid #ccc; border-radius:4px; text-align:center; width:145px;" 
+            <input type="text" value="${item.start}" maxlength="5" placeholder="00:00"
+                   style="font-size:18px; padding:2px 4px; border:1px solid #ccc; border-radius:4px; text-align:center; width:75px;" 
                    onchange="updateItemTime(${index}, 'start', this.value)">
             <span style="margin:0 6px; font-weight:bold;">~</span>
-            <input type="time" value="${item.end}" 
-                   style="font-size:18px; padding:2px 4px; border:1px solid #ccc; border-radius:4px; text-align:center; width:145px;" 
+            <input type="text" value="${item.end}" maxlength="5" placeholder="00:00"
+                   style="font-size:18px; padding:2px 4px; border:1px solid #ccc; border-radius:4px; text-align:center; width:75px;" 
                    onchange="updateItemTime(${index}, 'end', this.value)">
           `;
 
@@ -604,7 +608,6 @@
         }
       }
 
-      // 其他 UI 渲染邏輯保持不變...
       function updateSvgProgress(percentage, color) {
         var box = document.getElementById('countdown-box');
         var svg = document.getElementById('countdown-svg');
