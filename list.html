@@ -537,178 +537,200 @@
   }
 
   // 🛠️ 核心優化：缺考回報統計表格渲染（每筆獨立、排除重複、限15天）
-  // 缺考回報統計表格渲染 (已修正：重複回報時，直接以最新資料覆蓋，不加總)
-  function buildAbsenceTablesWithPreload(classesNode, absenceNode) {
-    const bodies = {
-      1: document.getElementById('absenceBody1'),
-      2: document.getElementById('absenceBody2'),
-      3: document.getElementById('absenceBody3'),
-      4: document.getElementById('absenceBody4'),
-      5: document.getElementById('absenceBody5'),
-      6: document.getElementById('absenceBody6')
-    };
+function buildAbsenceTablesWithPreload(classesNode, absenceNode) {
+  const bodies = {
+    1: document.getElementById('absenceBody1'),
+    2: document.getElementById('absenceBody2'),
+    3: document.getElementById('absenceBody3'),
+    4: document.getElementById('absenceBody4'),
+    5: document.getElementById('absenceBody5'),
+    6: document.getElementById('absenceBody6')
+  };
 
-    let htmls = { 1: "", 2: "", 3: "", 4: "", 5: "", 6: "" };
-    let gradeCounts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
+  let htmls = { 1: "", 2: "", 3: "", 4: "", 5: "", 6: "" };
+  let gradeCounts = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
 
-    let subjectAlerts = {
-      1: { zh: false, life: false, math: false },
-      2: { zh: false, life: false, math: false },
-      3: { zh: false, nature: false, eng: false, math: false, society: false },
-      4: { zh: false, nature: false, eng: false, math: false, society: false },
-      5: { zh: false, nature: false, eng: false, math: false, society: false },
-      6: { zh: false, nature: false, eng: false, math: false, society: false }
-    };
+  let subjectAlerts = {
+    1: { zh: false, life: false, math: false },
+    2: { zh: false, life: false, math: false },
+    3: { zh: false, nature: false, eng: false, math: false, society: false },
+    4: { zh: false, nature: false, eng: false, math: false, society: false },
+    5: { zh: false, nature: false, eng: false, math: false, society: false },
+    6: { zh: false, nature: false, eng: false, math: false, society: false }
+  };
 
-    const formatAbsence = (val) => {
-      if (val === undefined || val === null || val === "") return `<span class="status-not-filled">未填</span>`;
-      const num = parseInt(val, 10);
-      if (!isNaN(num) && num > 0) return `<span style="color: #ef4444; font-size: 18px; font-weight: 800;">${val}</span>`;
-      return "0";
-    };
+  const formatAbsence = (val) => {
+    if (val === undefined || val === null || val === "") return `<span class="status-not-filled">未填</span>`;
+    const num = parseInt(val, 10);
+    if (!isNaN(num) && num > 0) return `<span style="color: #ef4444; font-size: 18px; font-weight: 800;">${val}</span>`;
+    return "0";
+  };
 
-    const getNumValue = (val) => {
-      if (val === undefined || val === null || val === "") return 0;
-      const num = parseInt(val, 10);
-      return (!isNaN(num) && num > 0) ? num : 0;
-    };
+  const getNumValue = (val) => {
+    if (val === undefined || val === null || val === "") return 0;
+    const num = parseInt(val, 10);
+    return (!isNaN(num) && num > 0) ? num : 0;
+  };
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const fifteenDaysInMs = 15 * 24 * 60 * 60 * 1000;
-    const minTime = today.getTime() - fifteenDaysInMs;
-    const maxTime = today.getTime() + fifteenDaysInMs;
-
-    const absenceMap = {};
-    const absenceList = [];
-    
-    // 💡 優化點 1：將資料拆解並注入原始索引與 Key，避免同日期的文字排序失準
-    if (Array.isArray(absenceNode)) {
-      absenceNode.forEach((rec, idx) => { if (rec) absenceList.push({ ...rec, _sortIdx: idx }); });
-    } else if (absenceNode && typeof absenceNode === 'object') {
-      Object.keys(absenceNode).forEach((key, idx) => {
-        if (absenceNode[key]) absenceList.push({ ...absenceNode[key], _sortKey: key, _sortIdx: idx });
-      });
+  // 💡 新增：處理中文字「上午/下午」的時間解析器，確保排序與 15 天判斷正常
+  const parseDateSafe = (dateStr) => {
+    if (!dateStr) return 0;
+    const str = String(dateStr);
+    const dateMatch = str.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+    if (dateMatch) {
+      let hours = 0, mins = 0, secs = 0;
+      const timeMatch = str.match(/(\d{1,2}):(\d{1,2}):(\d{1,2})/);
+      if (timeMatch) {
+        hours = parseInt(timeMatch[1], 10);
+        mins = parseInt(timeMatch[2], 10);
+        secs = parseInt(timeMatch[3], 10);
+        if (str.includes('下午') && hours < 12) hours += 12;
+        if (str.includes('上午') && hours === 12) hours = 0;
+      }
+      return new Date(dateMatch[1], dateMatch[2] - 1, dateMatch[3], hours, mins, secs).getTime();
     }
-    
-    // 依據時間「由舊到新」排序。若時間解析相同，則沿用 Firebase 原生 push ID 或索引順序
-    absenceList.sort((a, b) => {
-      const timeA = new Date(a.日期 || a.時間戳記 || a.timestamp || 0).getTime();
-      const timeB = new Date(b.日期 || b.時間戳記 || b.timestamp || 0).getTime();
-      if (timeA !== timeB) return timeA - timeB;
-      if (a._sortKey && b._sortKey) return a._sortKey.localeCompare(b._sortKey);
-      return a._sortIdx - b._sortIdx;
-    });
+    const fallback = new Date(str).getTime();
+    return isNaN(fallback) ? 0 : fallback;
+  };
 
-    absenceList.forEach(rec => {
-      if (rec && rec.班級) {
-        let recDateStr = rec.日期 || rec.時間戳記 || rec.timestamp;
-        let isWithinRange = true;
-        if (recDateStr) {
-          let recDate = new Date(recDateStr);
-          if (!isNaN(recDate.getTime())) {
-            let recTime = recDate.getTime();
-            if (recTime < minTime || recTime > maxTime) isWithinRange = false;
-          }
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const fifteenDaysInMs = 15 * 24 * 60 * 60 * 1000;
+  const minTime = today.getTime() - fifteenDaysInMs;
+  const maxTime = today.getTime() + fifteenDaysInMs + (24 * 60 * 60 * 1000); // 包含今日整天
+
+  const absenceMap = {};
+  const absenceList = [];
+  
+  if (Array.isArray(absenceNode)) {
+    absenceNode.forEach((rec, idx) => { if (rec) absenceList.push({ ...rec, _sortIdx: idx }); });
+  } else if (absenceNode && typeof absenceNode === 'object') {
+    Object.keys(absenceNode).forEach((key, idx) => {
+      if (absenceNode[key]) absenceList.push({ ...absenceNode[key], _sortKey: key, _sortIdx: idx });
+    });
+  }
+  
+  // 依據時間「由舊到新」排序，確保新資料在後面處理時會覆蓋舊資料
+  absenceList.sort((a, b) => {
+    const timeA = parseDateSafe(a.日期 || a.時間戳記 || a.timestamp);
+    const timeB = parseDateSafe(b.日期 || b.時間戳記 || b.timestamp);
+    if (timeA !== timeB && timeA > 0 && timeB > 0) return timeA - timeB;
+    if (a._sortKey && b._sortKey) return a._sortKey.localeCompare(b._sortKey);
+    return a._sortIdx - b._sortIdx;
+  });
+
+  absenceList.forEach(rec => {
+    if (rec && rec.班級) {
+      let recDateStr = rec.日期 || rec.時間戳記 || rec.timestamp;
+      let isWithinRange = true;
+      
+      if (recDateStr) {
+        let recTime = parseDateSafe(recDateStr);
+        if (recTime > 0) {
+          if (recTime < minTime || recTime > maxTime) isWithinRange = false;
+        }
+      }
+      
+      if (isWithinRange) {
+        const className = String(rec.班級).trim();
+        
+        if (!absenceMap[className]) {
+          absenceMap[className] = { ...rec };
         }
         
-        if (isWithinRange) {
-          const className = String(rec.班級).trim();
-          
-          if (!absenceMap[className]) {
-            // 如果這個班級第一次出現，直接整筆寫入
-            absenceMap[className] = { ...rec };
-          } else {
-            // 💡 修正點 2：同班級有第二筆以上資料時，進行「最新考科資料覆蓋」
-            const subjects = ['國語', '數學', '生活', '自然', '英文', '社會'];
-            subjects.forEach(sub => {
-              // 只要最新的這筆回報有填寫該科目（不是空字串/null），就直接用新數據取代舊數據
-              if (rec[sub] !== undefined && rec[sub] !== null && rec[sub] !== "") {
-                absenceMap[className][sub] = rec[sub]; // 使用 = 直接覆蓋，不加總
-              }
-            });
+        // 💡 修正 1：支援資料庫中的 "科目: 英文, 缺考人數: 3" 格式
+        if (rec.科目 && rec.缺考人數 !== undefined && rec.缺考人數 !== null) {
+           const subjectName = String(rec.科目).trim();
+           // 直接賦值：利用迴圈順序，最新時間的會直接蓋掉舊的
+           absenceMap[className][subjectName] = rec.缺考人數; 
+        }
+
+        // 💡 修正 2：保留兼容原本將考科直接當作 Key 的寫法
+        const subjects = ['國語', '數學', '生活', '自然', '英文', '社會'];
+        subjects.forEach(sub => {
+          if (rec[sub] !== undefined && rec[sub] !== null && rec[sub] !== "") {
+            absenceMap[className][sub] = rec[sub];
           }
-        }
-      }
-    });
-
-    let classList = [];
-    if (Array.isArray(classesNode)) {
-      classList = classesNode;
-    } else if (typeof classesNode === 'object') {
-      Object.keys(classesNode).forEach(k => { if (k !== '網址') classList.push(classesNode[k]); });
-    }
-
-    classList.forEach(className => {
-      if (!className || typeof className !== 'string') return;
-      className = className.trim();
-
-      let gradeNum = 0;
-      if (/^[一1]/.test(className)) gradeNum = 1;
-      else if (/^[二2]/.test(className)) gradeNum = 2;
-      else if (/^[三3]/.test(className)) gradeNum = 3;
-      else if (/^[四4]/.test(className)) gradeNum = 4;
-      else if (/^[五5]/.test(className)) gradeNum = 5;
-      else if (/^[六6]/.test(className)) gradeNum = 6;
-
-      if (gradeNum >= 1 && gradeNum <= 6) {
-        gradeCounts[gradeNum]++;
-        const record = absenceMap[className] || {};
-
-        if (getNumValue(record.國語) > 0) subjectAlerts[gradeNum].zh = true;
-        if (getNumValue(record.數學) > 0) subjectAlerts[gradeNum].math = true;
-        if (gradeNum <= 2 && getNumValue(record.生活) > 0) subjectAlerts[gradeNum].life = true;
-        if (gradeNum >= 3) {
-          if (getNumValue(record.自然) > 0) subjectAlerts[gradeNum].nature = true;
-          if (getNumValue(record.英文) > 0) subjectAlerts[gradeNum].eng = true;
-          if (getNumValue(record.社會) > 0) subjectAlerts[gradeNum].society = true;
-        }
-
-        const zh = formatAbsence(record.國語);
-        const math = formatAbsence(record.數學);
-        const nature = formatAbsence(record.自然);
-        const eng = formatAbsence(record.英文);
-        const society = formatAbsence(record.社會);
-        const life = formatAbsence(record.生活);
-
-        // 💡 修正點 3：修正原本多包一個 <td> 的 HTML 語法 Bug，確保一、二年級表格欄位對齊不落單
-        if (gradeNum === 1 || gradeNum === 2) {
-          htmls[gradeNum] += `<tr><td style="font-weight: 600; color: #1e293b;">${className}</td><td>${zh}</td><td>${life}</td><td>${math}</td></tr>`;
-        } else {
-          htmls[gradeNum] += `<tr><td style="font-weight: 600; color: #1e293b;">${className}</td><td>${zh}</td><td>${nature}</td><td>${eng}</td><td>${math}</td><td>${society}</td></tr>`;
-        }
-      }
-    });
-
-    const toggleThAlert = (id, isActive) => {
-      const th = document.getElementById(id);
-      if (th) {
-        if (isActive) th.classList.add('th-alert');
-        else th.classList.remove('th-alert');
-      }
-    };
-
-    for (let i = 1; i <= 6; i++) {
-      if (bodies[i]) {
-        if (gradeCounts[i] > 0) bodies[i].innerHTML = htmls[i];
-        else {
-          let cols = (i === 1 || i === 2) ? 4 : 6;
-          bodies[i].innerHTML = `<tr><td colspan="${cols}" style="text-align:center; color:#94a3b8; padding: 20px;">資料庫內無預載班級</td></tr>`;
-        }
-      }
-
-      toggleThAlert(`th-g${i}-zh`, subjectAlerts[i].zh);
-      toggleThAlert(`th-g${i}-math`, subjectAlerts[i].math);
-      if (i <= 2) {
-        toggleThAlert(`th-g${i}-life`, subjectAlerts[i].life);
-      } else {
-        toggleThAlert(`th-g${i}-nature`, subjectAlerts[i].nature);
-        toggleThAlert(`th-g${i}-eng`, subjectAlerts[i].eng);
-        toggleThAlert(`th-g${i}-society`, subjectAlerts[i].society);
+        });
       }
     }
+  });
+
+  let classList = [];
+  if (Array.isArray(classesNode)) {
+    classList = classesNode;
+  } else if (typeof classesNode === 'object') {
+    Object.keys(classesNode).forEach(k => { if (k !== '網址') classList.push(classesNode[k]); });
   }
 
+  classList.forEach(className => {
+    if (!className || typeof className !== 'string') return;
+    className = className.trim();
+
+    let gradeNum = 0;
+    if (/^[一1]/.test(className)) gradeNum = 1;
+    else if (/^[二2]/.test(className)) gradeNum = 2;
+    else if (/^[三3]/.test(className)) gradeNum = 3;
+    else if (/^[四4]/.test(className)) gradeNum = 4;
+    else if (/^[五5]/.test(className)) gradeNum = 5;
+    else if (/^[六6]/.test(className)) gradeNum = 6;
+
+    if (gradeNum >= 1 && gradeNum <= 6) {
+      gradeCounts[gradeNum]++;
+      const record = absenceMap[className] || {};
+
+      if (getNumValue(record.國語) > 0) subjectAlerts[gradeNum].zh = true;
+      if (getNumValue(record.數學) > 0) subjectAlerts[gradeNum].math = true;
+      if (gradeNum <= 2 && getNumValue(record.生活) > 0) subjectAlerts[gradeNum].life = true;
+      if (gradeNum >= 3) {
+        if (getNumValue(record.自然) > 0) subjectAlerts[gradeNum].nature = true;
+        if (getNumValue(record.英文) > 0) subjectAlerts[gradeNum].eng = true;
+        if (getNumValue(record.社會) > 0) subjectAlerts[gradeNum].society = true;
+      }
+
+      const zh = formatAbsence(record.國語);
+      const math = formatAbsence(record.數學);
+      const nature = formatAbsence(record.自然);
+      const eng = formatAbsence(record.英文);
+      const society = formatAbsence(record.社會);
+      const life = formatAbsence(record.生活);
+
+      if (gradeNum === 1 || gradeNum === 2) {
+        htmls[gradeNum] += `<tr><td style="font-weight: 600; color: #1e293b;">${className}</td><td>${zh}</td><td>${life}</td><td>${math}</td></tr>`;
+      } else {
+        htmls[gradeNum] += `<tr><td style="font-weight: 600; color: #1e293b;">${className}</td><td>${zh}</td><td>${nature}</td><td>${eng}</td><td>${math}</td><td>${society}</td></tr>`;
+      }
+    }
+  });
+
+  const toggleThAlert = (id, isActive) => {
+    const th = document.getElementById(id);
+    if (th) {
+      if (isActive) th.classList.add('th-alert');
+      else th.classList.remove('th-alert');
+    }
+  };
+
+  for (let i = 1; i <= 6; i++) {
+    if (bodies[i]) {
+      if (gradeCounts[i] > 0) bodies[i].innerHTML = htmls[i];
+      else {
+        let cols = (i === 1 || i === 2) ? 4 : 6;
+        bodies[i].innerHTML = `<tr><td colspan="${cols}" style="text-align:center; color:#94a3b8; padding: 20px;">資料庫內無預載班級</td></tr>`;
+      }
+    }
+
+    toggleThAlert(`th-g${i}-zh`, subjectAlerts[i].zh);
+    toggleThAlert(`th-g${i}-math`, subjectAlerts[i].math);
+    if (i <= 2) {
+      toggleThAlert(`th-g${i}-life`, subjectAlerts[i].life);
+    } else {
+      toggleThAlert(`th-g${i}-nature`, subjectAlerts[i].nature);
+      toggleThAlert(`th-g${i}-eng`, subjectAlerts[i].eng);
+      toggleThAlert(`th-g${i}-society`, subjectAlerts[i].society);
+    }
+  }
+}
   // 考試網址表格渲染
   function renderGradeTablesFromFirebase(timeNode, classUrls) {
     const container = document.getElementById('gradeTablesContainer');
