@@ -17,8 +17,8 @@ jobs:
         run: |
           URL="${SUPABASE_URL:-https://ltkvavtvwyrholntnzik.supabase.co}"
 
-          # 直接讀取 exam bucket 中的 301_1782094570849.mp3 公開檔案
-          TARGET_URL="${URL}/storage/v1/object/public/exam/301_1782094570849.mp3"
+          # 直接讀取 exam bucket 中的 Meow.wav 公開檔案
+          TARGET_URL="${URL}/storage/v1/object/public/exam/Meow.wav"
 
           RESPONSE_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X GET "${TARGET_URL}")
 
