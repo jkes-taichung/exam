@@ -1,0 +1,35 @@
+name: Keep Supabase Alive
+
+on:
+  schedule:
+    # 每 3 天在 UTC 00:00 (台灣時間上午 08:00) 自動觸發執行
+    - cron: '0 0 */3 * *'
+  # 支援在 GitHub Actions 頁面手動點擊按鈕觸發測試
+  workflow_dispatch:
+
+jobs:
+  ping-supabase:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase PostgREST API
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          # 優先使用 GitHub Secrets，若未設定則自動備用你提供的連線資訊
+          URL="${SUPABASE_URL:-https://ltkvavtvwyrholntnzik.supabase.co}"
+          KEY="${SUPABASE_ANON_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx0a3ZhdnR2d3lyaG9sbnRuemlrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA4MzIxMjEsImV4cCI6MjA5NjQwODEyMX0.Hy_1daIKEsL_-r1EPmc2fONBTRpyQg8he95vmnboS5E}"
+
+          # 請求 PostgREST 根目錄（讀取 API 規格，不需相依特定資料表名稱）
+          RESPONSE_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X GET "${URL}/rest/v1/" \
+            -H "apikey: ${KEY}" \
+            -H "Authorization: Bearer ${KEY}")
+
+          echo "Supabase HTTP 回傳狀態碼: $RESPONSE_CODE"
+
+          if [ "$RESPONSE_CODE" -eq 200 ]; then
+            echo "SUCCESS: 已成功讀取 Supabase API，專案狀態保持活躍！"
+          else
+            echo "ERROR: 連線異常，HTTP 狀態碼為 $RESPONSE_CODE"
+            exit 1
+          fi
